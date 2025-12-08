@@ -30,14 +30,31 @@ export class EmailService {
       return;
     }
 
+    // Trim whitespace from password (common issue: spaces in app passwords)
+    const trimmedPassword = emailPassword.trim().replace(/\s+/g, '');
+    
+    // Log configuration (without showing password)
+    this.logger.log('Email service configuration:');
+    this.logger.log(`  Host: ${emailHost}`);
+    this.logger.log(`  Port: ${emailPort || 587}`);
+    this.logger.log(`  User: ${emailUser}`);
+    this.logger.log(`  Password: ${trimmedPassword.length > 0 ? '***' + trimmedPassword.slice(-4) : 'NOT SET'}`);
+    
+    // Warn if password had spaces
+    if (emailPassword !== trimmedPassword) {
+      this.logger.warn(
+        '⚠️  Password had spaces/whitespace - they have been removed. Make sure your .env has no spaces in EMAIL_PASSWORD.',
+      );
+    }
+
     // Create transporter
     this.transporter = nodemailer.createTransport({
       host: emailHost,
       port: emailPort || 587,
       secure: emailPort === 465, // true for 465, false for other ports
       auth: {
-        user: emailUser,
-        pass: emailPassword,
+        user: emailUser.trim(),
+        pass: trimmedPassword,
       },
     });
 
@@ -187,23 +204,53 @@ Land Registration Team
       this.logger.log(`Email sent successfully to ${to}`);
       this.logger.debug(`Message ID: ${info.messageId}`);
     } catch (error) {
+      const errorMessage = (error as Error).message;
       this.logger.error(`Failed to send email to ${to}:`, error);
-      throw new Error(`Failed to send email: ${(error as Error).message}`);
+      
+      // Provide helpful error messages for common Gmail errors
+      if (errorMessage.includes('Invalid login') || errorMessage.includes('BadCredentials')) {
+        this.logger.error('');
+        this.logger.error('🔴 GMAIL AUTHENTICATION ERROR');
+        this.logger.error('Common causes:');
+        this.logger.error('  1. App password has spaces (remove all spaces from EMAIL_PASSWORD)');
+        this.logger.error('  2. Using regular Gmail password instead of App Password');
+        this.logger.error('  3. 2-Step Verification not enabled');
+        this.logger.error('  4. App password was revoked or expired');
+        this.logger.error('');
+        this.logger.error('See GMAIL_TROUBLESHOOTING.md for detailed help');
+        this.logger.error('');
+      }
+      
+      throw new Error(`Failed to send email: ${errorMessage}`);
     }
   }
 
   // Test email configuration
   async testEmailConnection(): Promise<boolean> {
     if (!this.transporter) {
+      this.logger.error('Email service not configured');
       return false;
     }
 
     try {
       await this.transporter.verify();
-      this.logger.log('Email service connection verified');
+      this.logger.log('✅ Email service connection verified successfully');
       return true;
     } catch (error) {
-      this.logger.error('Email service connection failed:', error);
+      const errorMessage = (error as Error).message;
+      this.logger.error('❌ Email service connection failed:', errorMessage);
+      
+      // Provide helpful error messages
+      if (errorMessage.includes('Invalid login') || errorMessage.includes('BadCredentials')) {
+        this.logger.error('');
+        this.logger.error('🔴 GMAIL AUTHENTICATION ERROR');
+        this.logger.error('Fix: Check your EMAIL_PASSWORD in .env file');
+        this.logger.error('   - Remove all spaces from app password');
+        this.logger.error('   - Use App Password (not regular password)');
+        this.logger.error('   - Ensure 2-Step Verification is enabled');
+        this.logger.error('');
+      }
+      
       return false;
     }
   }

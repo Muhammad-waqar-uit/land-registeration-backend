@@ -1,23 +1,25 @@
 # Land Registration Management System - Backend API
 
-A comprehensive backend API for land registration and management built with **NestJS**, **TypeORM**, and **Supabase**.
+A comprehensive backend API for land registration and management built with **NestJS**, **TypeORM**, and **Neon PostgreSQL**.
 
 ## 🚀 Features
 
 - **Authentication & Authorization**: JWT-based authentication with role-based access control (Admin, Seller, Buyer, Builder)
+- **User Management**: Registration, login, profile management, password update, and password reset via email
 - **Land Management**: Full CRUD operations for land listings with file upload support
 - **Payment Processing**: Payment creation, verification, and tracking with multiple payment modes
 - **Reservation System**: Land reservation functionality with status management
-- **File Storage**: Integrated Supabase Storage for document management
+- **File Storage**: Local file storage system for document management
+- **Email Service**: Password reset emails via Gmail SMTP
 - **API Documentation**: Complete Swagger/OpenAPI documentation
-- **Database**: PostgreSQL via Supabase with TypeORM
+- **Database**: PostgreSQL via Neon (serverless PostgreSQL)
 
 ## 📋 Prerequisites
 
 - Node.js (v18 or higher)
 - npm or pnpm
-- Supabase account and project
-- PostgreSQL database access (via Supabase)
+- Neon PostgreSQL account (or any PostgreSQL database)
+- Gmail account (for email service - optional, can use development mode)
 
 ## 🛠️ Installation
 
@@ -36,43 +38,14 @@ A comprehensive backend API for land registration and management built with **Ne
 
 3. **Set up environment variables**
    
-   Create a `.env` file in the root directory:
-   ```env
-   # Supabase Configuration
-   SUPABASE_URL=https://[PROJECT_REF].supabase.co
-   SUPABASE_DB_HOST=[PROJECT_REF].supabase.co
-   SUPABASE_DB_PORT=5432
-   SUPABASE_DB_USERNAME=postgres
-   SUPABASE_DB_PASSWORD=[PASSWORD]
-   SUPABASE_DB_DATABASE=postgres
-   DATABASE_URL=postgresql://postgres:[PASSWORD]@[PROJECT_REF].supabase.co:5432/postgres
-
-   # JWT Configuration
-   JWT_SECRET=your-secret-key-here
-   JWT_EXPIRES_IN=7d
-
-   # App Configuration
-   PORT=3000
-   NODE_ENV=development
-
-   # Supabase Storage (for file uploads)
-   SUPABASE_STORAGE_BUCKET=land-documents
-   SUPABASE_STORAGE_URL=https://[PROJECT_REF].supabase.co/storage/v1
-   SUPABASE_ANON_KEY=[ANON_KEY]
-   SUPABASE_SERVICE_KEY=[SERVICE_KEY]
-
-   # CORS
-   CORS_ORIGIN=http://localhost:3000,http://localhost:3001
+   Copy the example environment file:
+   ```bash
+   cp .env.example .env
    ```
-
-4. **Get Supabase credentials**
    
-   - Go to your Supabase project dashboard
-   - **Database Connection**: Settings → Database → Connection string
-   - **Storage Keys**: Settings → API → Copy Project URL, Anon Key, and Service Role Key
-   - Create a storage bucket named `land-documents` in Storage section
+   Then edit `.env` and fill in all required values. See [Environment Variables](#-environment-variables) section below for detailed instructions on how to get each value.
 
-5. **Run database migrations** (optional, synchronize is enabled in development)
+4. **Run database migrations** (optional, synchronize is enabled in development)
    ```bash
    # TypeORM will automatically sync schema in development mode
    ```
@@ -114,7 +87,11 @@ http://localhost:3000/api
 |--------|----------|-------------|---------------|
 | POST | `/auth/register` | Register a new user | No |
 | POST | `/auth/login` | User login | No |
-| GET | `/auth/me` | Get current user | Yes |
+| GET | `/auth/me` | Get current user profile | Yes |
+| PATCH | `/auth/profile` | Update user profile | Yes |
+| PATCH | `/auth/password` | Update password | Yes |
+| POST | `/auth/forgot-password` | Request password reset email | No |
+| POST | `/auth/reset-password` | Reset password with token | No |
 | POST | `/auth/logout` | Logout user | Yes |
 
 ### Lands (`/api/lands`)
@@ -181,12 +158,25 @@ The API uses JWT (JSON Web Tokens) for authentication.
 - **buyer**: Can view lands, create payments, create reservations
 - **builder**: Can verify payments, view all lands
 
+### Password Reset Flow
+
+1. User requests password reset: `POST /api/auth/forgot-password`
+2. System sends email with reset link (if email service configured)
+3. User clicks link: `http://localhost:3000/reset-password?token=abc123...`
+4. User submits new password: `POST /api/auth/reset-password`
+
+See `FRONTEND_PASSWORD_RESET_GUIDE.md` for frontend implementation details.
+
 ## 📁 Project Structure
 
 ```
 src/
 ├── auth/                 # Authentication module
 │   ├── dto/             # Data Transfer Objects
+│   │   ├── forgot-password.dto.ts
+│   │   ├── reset-password.dto.ts
+│   │   ├── update-password.dto.ts
+│   │   └── update-profile.dto.ts
 │   ├── strategies/      # JWT strategy
 │   ├── auth.controller.ts
 │   ├── auth.service.ts
@@ -210,17 +200,19 @@ src/
 │   ├── user.entity.ts
 │   ├── land.entity.ts
 │   ├── payment.entity.ts
-│   └── reservation.entity.ts
+│   ├── reservation.entity.ts
+│   └── password-reset-token.entity.ts
 ├── common/              # Shared utilities
-│   ├── decorators/      # Custom decorators
+│   ├── decorators/      # Custom decorators (Public, Roles)
 │   ├── guards/          # Auth guards
 │   ├── filters/         # Exception filters
 │   ├── interceptors/    # Response interceptors
-│   └── services/        # Shared services
+│   └── services/       # Shared services
+│       ├── file-storage.service.ts
+│       └── email.service.ts
 ├── config/              # Configuration files
 │   ├── database.config.ts
-│   ├── jwt.config.ts
-│   └── supabase.config.ts
+│   └── jwt.config.ts
 ├── app.module.ts        # Root module
 └── main.ts              # Application entry point
 ```
@@ -242,7 +234,7 @@ src/
 - size (decimal)
 - price (decimal)
 - status (enum: available, locked, sold)
-- documentHash, documentCID (for IPFS/storage)
+- documentPath (string, for file storage)
 - ownerId (FK to User)
 - createdAt, updatedAt
 
@@ -254,8 +246,9 @@ src/
 - dueDate (date)
 - status (enum: pending, verified, rejected)
 - paymentMode (enum: bank, crypto)
-- proofCID, transactionHash
-- remarks (text)
+- proofPath (string, for file storage)
+- transactionHash (string)
+- remarks (text, nullable)
 - createdAt, updatedAt
 
 ### Reservation Entity
@@ -264,6 +257,14 @@ src/
 - buyerId (FK to User)
 - status (enum: active, cancelled)
 - createdAt, updatedAt
+
+### Password Reset Token Entity
+- id (UUID)
+- userId (FK to User)
+- token (string, hashed)
+- expiresAt (timestamp)
+- used (boolean)
+- createdAt
 
 ## 🧪 Testing
 
@@ -278,25 +279,88 @@ npm run test:e2e
 npm run test:cov
 ```
 
-## 📝 Environment Variables Reference
+## 📝 Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `SUPABASE_URL` | Supabase project URL | Yes |
-| `SUPABASE_DB_HOST` | Database host | Yes |
-| `SUPABASE_DB_PORT` | Database port (default: 5432) | No |
-| `SUPABASE_DB_USERNAME` | Database username | Yes |
-| `SUPABASE_DB_PASSWORD` | Database password | Yes |
-| `SUPABASE_DB_DATABASE` | Database name (default: postgres) | No |
-| `DATABASE_URL` | Full database connection URL | Yes |
-| `JWT_SECRET` | Secret key for JWT tokens | Yes |
-| `JWT_EXPIRES_IN` | JWT expiration time (default: 7d) | No |
-| `PORT` | Application port (default: 3000) | No |
-| `NODE_ENV` | Environment (development/production) | No |
-| `SUPABASE_STORAGE_BUCKET` | Storage bucket name | Yes |
-| `SUPABASE_ANON_KEY` | Supabase anonymous key | Yes |
-| `SUPABASE_SERVICE_KEY` | Supabase service role key | Yes |
-| `CORS_ORIGIN` | Allowed CORS origins | No |
+See `.env.example` for a complete template with detailed instructions on how to obtain each value.
+
+### Required Variables
+
+| Variable | Description | How to Get |
+|----------|-------------|------------|
+| `DATABASE_URL` | Full PostgreSQL connection URL | See [Database Setup](#database-setup) |
+| `JWT_SECRET` | Secret key for JWT tokens | Generate with: `openssl rand -base64 32` |
+| `EMAIL_HOST` | SMTP server host (for email service) | `smtp.gmail.com` for Gmail |
+| `EMAIL_USER` | SMTP username (your email) | Your Gmail address |
+| `EMAIL_PASSWORD` | SMTP password (app password) | See [Email Setup](#email-setup) |
+| `EMAIL_FROM` | Email sender address | Your Gmail address |
+| `FRONTEND_URL` | Frontend URL for reset links | `http://localhost:3000` (or your frontend URL) |
+
+### Optional Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_HOST` | Database host | Uses `DATABASE_URL` if set |
+| `DB_PORT` | Database port | 5432 |
+| `DB_USERNAME` | Database username | Uses `DATABASE_URL` if set |
+| `DB_PASSWORD` | Database password | Uses `DATABASE_URL` if set |
+| `DB_DATABASE` | Database name | postgres |
+| `JWT_EXPIRES_IN` | JWT expiration time | 7d |
+| `PORT` | Application port | 3000 |
+| `NODE_ENV` | Environment | development |
+| `EMAIL_PORT` | SMTP port | 587 |
+
+### Database Setup
+
+#### Option 1: Neon PostgreSQL (Recommended)
+
+1. Go to [neon.tech](https://neon.tech)
+2. Sign up and create a new project
+3. Go to **Dashboard** → **Connection Details**
+4. Copy the **Connection string** (pooler or direct)
+5. Paste it as `DATABASE_URL` in your `.env` file
+
+**Example:**
+```env
+DATABASE_URL=postgresql://user:password@ep-xxx-xxx-pooler.us-east-1.aws.neon.tech/dbname?sslmode=require
+```
+
+#### Option 2: Individual Database Fields
+
+If you prefer individual fields instead of `DATABASE_URL`:
+
+```env
+DB_HOST=your-db-host.com
+DB_PORT=5432
+DB_USERNAME=your-username
+DB_PASSWORD=your-password
+DB_DATABASE=your-database
+```
+
+### Email Setup (Gmail)
+
+1. **Enable 2-Step Verification**
+   - Go to: https://myaccount.google.com/security
+   - Enable "2-Step Verification"
+
+2. **Generate App Password**
+   - Go to: https://myaccount.google.com/apppasswords
+   - Select: **App** → Mail, **Device** → Other (Custom name) → `Land Register Backend`
+   - Click **Generate**
+   - Copy the 16-character password (remove spaces!)
+
+3. **Add to .env**
+   ```env
+   EMAIL_HOST=smtp.gmail.com
+   EMAIL_PORT=587
+   EMAIL_USER=your-email@gmail.com
+   EMAIL_PASSWORD=abcdefghijklmnop  # 16 chars, no spaces
+   EMAIL_FROM=your-email@gmail.com
+   FRONTEND_URL=http://localhost:3000
+   ```
+
+**Note:** If email is not configured, the system will log emails to console (development mode).
+
+See `GMAIL_SETUP.md` for detailed Gmail setup instructions.
 
 ## 🔒 Security Features
 
@@ -307,6 +371,8 @@ npm run test:cov
 - SQL injection prevention (TypeORM parameterized queries)
 - CORS configuration
 - File upload validation
+- Password reset tokens (hashed, with expiry)
+- Email-based password recovery
 
 ## 📦 Key Dependencies
 
@@ -317,19 +383,22 @@ npm run test:cov
 - `typeorm`: ORM for database operations
 - `pg`: PostgreSQL driver
 - `bcrypt`: Password hashing
-- `@supabase/supabase-js`: Supabase client
+- `nodemailer`: Email service
 - `class-validator`: Input validation
 - `@nestjs/swagger`: API documentation
+- `multer`: File upload handling
 
 ## 🚀 Deployment
 
 1. Set `NODE_ENV=production` in your environment
 2. Update database connection settings for production
-3. Set secure `JWT_SECRET`
+3. Set secure `JWT_SECRET` (use a strong random string)
 4. Configure CORS origins for production domain
 5. Disable TypeORM `synchronize` in production (use migrations)
 6. Set up proper SSL certificates
 7. Configure environment variables on your hosting platform
+8. Set up email service (Gmail or production SMTP service)
+9. Configure `FRONTEND_URL` to your production frontend URL
 
 ## 📖 API Documentation
 
@@ -338,6 +407,14 @@ Interactive API documentation is available at `/api/docs` when the application i
 - Request/response schemas
 - Try-it-out functionality
 - Authentication testing
+
+## 📚 Additional Documentation
+
+- `FRONTEND_PASSWORD_RESET_GUIDE.md` - Frontend implementation guide for password reset
+- `FRONTEND_QUICK_REFERENCE.md` - Quick API reference for frontend developers
+- `GMAIL_SETUP.md` - Detailed Gmail SMTP setup instructions
+- `GMAIL_TROUBLESHOOTING.md` - Troubleshooting Gmail authentication issues
+- `SETUP.md` - Detailed setup guide
 
 ## 🤝 Contributing
 
@@ -359,10 +436,11 @@ For support, please open an issue in the repository or contact the development t
 
 - [NestJS Documentation](https://docs.nestjs.com/)
 - [TypeORM Documentation](https://typeorm.io/)
-- [Supabase Documentation](https://supabase.com/docs)
+- [Neon PostgreSQL](https://neon.tech/docs)
 - [Swagger/OpenAPI Documentation](https://swagger.io/docs/)
+- [Nodemailer Documentation](https://nodemailer.com/about/)
 
 ---
 
-**Last Updated**: 2024
+**Last Updated**: December 2024  
 **Version**: 1.0.0
