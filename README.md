@@ -442,5 +442,5 @@ For support, please open an issue in the repository or contact the development t
 
 ---
 
-**Last Updated**: December 2024  
+**Last Updated**: December 2025  
 **Version**: 1.0.0
