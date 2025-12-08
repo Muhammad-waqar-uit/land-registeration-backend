@@ -1,98 +1,368 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Land Registration Management System - Backend API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A comprehensive backend API for land registration and management built with **NestJS**, **TypeORM**, and **Supabase**.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🚀 Features
 
-## Description
+- **Authentication & Authorization**: JWT-based authentication with role-based access control (Admin, Seller, Buyer, Builder)
+- **Land Management**: Full CRUD operations for land listings with file upload support
+- **Payment Processing**: Payment creation, verification, and tracking with multiple payment modes
+- **Reservation System**: Land reservation functionality with status management
+- **File Storage**: Integrated Supabase Storage for document management
+- **API Documentation**: Complete Swagger/OpenAPI documentation
+- **Database**: PostgreSQL via Supabase with TypeORM
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 📋 Prerequisites
 
-## Project setup
+- Node.js (v18 or higher)
+- npm or pnpm
+- Supabase account and project
+- PostgreSQL database access (via Supabase)
 
+## 🛠️ Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd land-registeration-backend
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   # or
+   pnpm install
+   ```
+
+3. **Set up environment variables**
+   
+   Create a `.env` file in the root directory:
+   ```env
+   # Supabase Configuration
+   SUPABASE_URL=https://[PROJECT_REF].supabase.co
+   SUPABASE_DB_HOST=[PROJECT_REF].supabase.co
+   SUPABASE_DB_PORT=5432
+   SUPABASE_DB_USERNAME=postgres
+   SUPABASE_DB_PASSWORD=[PASSWORD]
+   SUPABASE_DB_DATABASE=postgres
+   DATABASE_URL=postgresql://postgres:[PASSWORD]@[PROJECT_REF].supabase.co:5432/postgres
+
+   # JWT Configuration
+   JWT_SECRET=your-secret-key-here
+   JWT_EXPIRES_IN=7d
+
+   # App Configuration
+   PORT=3000
+   NODE_ENV=development
+
+   # Supabase Storage (for file uploads)
+   SUPABASE_STORAGE_BUCKET=land-documents
+   SUPABASE_STORAGE_URL=https://[PROJECT_REF].supabase.co/storage/v1
+   SUPABASE_ANON_KEY=[ANON_KEY]
+   SUPABASE_SERVICE_KEY=[SERVICE_KEY]
+
+   # CORS
+   CORS_ORIGIN=http://localhost:3000,http://localhost:3001
+   ```
+
+4. **Get Supabase credentials**
+   
+   - Go to your Supabase project dashboard
+   - **Database Connection**: Settings → Database → Connection string
+   - **Storage Keys**: Settings → API → Copy Project URL, Anon Key, and Service Role Key
+   - Create a storage bucket named `land-documents` in Storage section
+
+5. **Run database migrations** (optional, synchronize is enabled in development)
+   ```bash
+   # TypeORM will automatically sync schema in development mode
+   ```
+
+## 🏃 Running the Application
+
+### Development
 ```bash
-$ pnpm install
+npm run start:dev
+# or
+pnpm run start:dev
 ```
 
-## Compile and run the project
+The application will start on `http://localhost:3000`
 
+### Production
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+npm run build
+npm run start:prod
 ```
 
-## Run tests
+### API Documentation (Swagger)
 
-```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+Once the application is running, access the Swagger documentation at:
+```
+http://localhost:3000/api/docs
 ```
 
-## Deployment
+## 📚 API Endpoints
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+### Base URL
+```
+http://localhost:3000/api
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Authentication (`/api/auth`)
 
-## Resources
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| POST | `/auth/register` | Register a new user | No |
+| POST | `/auth/login` | User login | No |
+| GET | `/auth/me` | Get current user | Yes |
+| POST | `/auth/logout` | Logout user | Yes |
 
-Check out a few resources that may come in handy when working with NestJS:
+### Lands (`/api/lands`)
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| GET | `/lands` | Get all lands (with filters) | Yes | All |
+| GET | `/lands/:id` | Get land by ID | Yes | All |
+| POST | `/lands` | Create new land | Yes | Seller, Admin |
+| PATCH | `/lands/:id` | Update land | Yes | Owner, Admin |
+| DELETE | `/lands/:id` | Delete land | Yes | Owner, Admin |
 
-## Support
+**Query Parameters for GET `/lands`:**
+- `status`: Filter by status (available, locked, sold)
+- `ownerId`: Filter by owner ID
+- `minPrice`: Minimum price
+- `maxPrice`: Maximum price
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 10)
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Payments (`/api/payments`)
 
-## Stay in touch
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| POST | `/payments` | Create payment | Yes | Buyer |
+| GET | `/payments/my-payments` | Get my payments | Yes | Buyer |
+| GET | `/payments/pending` | Get pending payments | Yes | Builder, Admin |
+| POST | `/payments/:id/verify` | Verify payment | Yes | Builder, Admin |
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### Reservations (`/api/reservations`)
 
-## License
+| Method | Endpoint | Description | Auth Required | Role |
+|--------|----------|-------------|---------------|------|
+| POST | `/reservations` | Create reservation | Yes | Buyer |
+| GET | `/reservations` | Get reservations | Yes | All |
+| DELETE | `/reservations/:id` | Cancel reservation | Yes | Owner |
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## 🔐 Authentication
+
+The API uses JWT (JSON Web Tokens) for authentication.
+
+### Getting a Token
+
+1. Register a new user or login:
+   ```bash
+   POST /api/auth/register
+   {
+     "name": "John Doe",
+     "email": "john@example.com",
+     "password": "password123",
+     "role": "buyer"
+   }
+   ```
+
+2. Use the token in subsequent requests:
+   ```
+   Authorization: Bearer <your-jwt-token>
+   ```
+
+### User Roles
+
+- **admin**: Full access to all resources
+- **seller**: Can create/update/delete own lands
+- **buyer**: Can view lands, create payments, create reservations
+- **builder**: Can verify payments, view all lands
+
+## 📁 Project Structure
+
+```
+src/
+├── auth/                 # Authentication module
+│   ├── dto/             # Data Transfer Objects
+│   ├── strategies/      # JWT strategy
+│   ├── auth.controller.ts
+│   ├── auth.service.ts
+│   └── auth.module.ts
+├── lands/               # Lands module
+│   ├── dto/
+│   ├── lands.controller.ts
+│   ├── lands.service.ts
+│   └── lands.module.ts
+├── payments/            # Payments module
+│   ├── dto/
+│   ├── payments.controller.ts
+│   ├── payments.service.ts
+│   └── payments.module.ts
+├── reservations/        # Reservations module
+│   ├── dto/
+│   ├── reservations.controller.ts
+│   ├── reservations.service.ts
+│   └── reservations.module.ts
+├── entities/            # TypeORM entities
+│   ├── user.entity.ts
+│   ├── land.entity.ts
+│   ├── payment.entity.ts
+│   └── reservation.entity.ts
+├── common/              # Shared utilities
+│   ├── decorators/      # Custom decorators
+│   ├── guards/          # Auth guards
+│   ├── filters/         # Exception filters
+│   ├── interceptors/    # Response interceptors
+│   └── services/        # Shared services
+├── config/              # Configuration files
+│   ├── database.config.ts
+│   ├── jwt.config.ts
+│   └── supabase.config.ts
+├── app.module.ts        # Root module
+└── main.ts              # Application entry point
+```
+
+## 🗄️ Database Schema
+
+### User Entity
+- id (UUID)
+- name (string)
+- email (string, unique)
+- password (string, hashed)
+- role (enum: admin, seller, buyer, builder)
+- createdAt, updatedAt
+
+### Land Entity
+- id (UUID)
+- title (string)
+- location (text)
+- size (decimal)
+- price (decimal)
+- status (enum: available, locked, sold)
+- documentHash, documentCID (for IPFS/storage)
+- ownerId (FK to User)
+- createdAt, updatedAt
+
+### Payment Entity
+- id (UUID)
+- landId (FK to Land)
+- buyerId (FK to User)
+- amount (decimal)
+- dueDate (date)
+- status (enum: pending, verified, rejected)
+- paymentMode (enum: bank, crypto)
+- proofCID, transactionHash
+- remarks (text)
+- createdAt, updatedAt
+
+### Reservation Entity
+- id (UUID)
+- landId (FK to Land)
+- buyerId (FK to User)
+- status (enum: active, cancelled)
+- createdAt, updatedAt
+
+## 🧪 Testing
+
+```bash
+# Unit tests
+npm run test
+
+# E2E tests
+npm run test:e2e
+
+# Test coverage
+npm run test:cov
+```
+
+## 📝 Environment Variables Reference
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `SUPABASE_URL` | Supabase project URL | Yes |
+| `SUPABASE_DB_HOST` | Database host | Yes |
+| `SUPABASE_DB_PORT` | Database port (default: 5432) | No |
+| `SUPABASE_DB_USERNAME` | Database username | Yes |
+| `SUPABASE_DB_PASSWORD` | Database password | Yes |
+| `SUPABASE_DB_DATABASE` | Database name (default: postgres) | No |
+| `DATABASE_URL` | Full database connection URL | Yes |
+| `JWT_SECRET` | Secret key for JWT tokens | Yes |
+| `JWT_EXPIRES_IN` | JWT expiration time (default: 7d) | No |
+| `PORT` | Application port (default: 3000) | No |
+| `NODE_ENV` | Environment (development/production) | No |
+| `SUPABASE_STORAGE_BUCKET` | Storage bucket name | Yes |
+| `SUPABASE_ANON_KEY` | Supabase anonymous key | Yes |
+| `SUPABASE_SERVICE_KEY` | Supabase service role key | Yes |
+| `CORS_ORIGIN` | Allowed CORS origins | No |
+
+## 🔒 Security Features
+
+- Password hashing with bcrypt
+- JWT token authentication
+- Role-based access control (RBAC)
+- Input validation with class-validator
+- SQL injection prevention (TypeORM parameterized queries)
+- CORS configuration
+- File upload validation
+
+## 📦 Key Dependencies
+
+- `@nestjs/core`: NestJS framework
+- `@nestjs/typeorm`: TypeORM integration
+- `@nestjs/passport`: Authentication
+- `@nestjs/jwt`: JWT token handling
+- `typeorm`: ORM for database operations
+- `pg`: PostgreSQL driver
+- `bcrypt`: Password hashing
+- `@supabase/supabase-js`: Supabase client
+- `class-validator`: Input validation
+- `@nestjs/swagger`: API documentation
+
+## 🚀 Deployment
+
+1. Set `NODE_ENV=production` in your environment
+2. Update database connection settings for production
+3. Set secure `JWT_SECRET`
+4. Configure CORS origins for production domain
+5. Disable TypeORM `synchronize` in production (use migrations)
+6. Set up proper SSL certificates
+7. Configure environment variables on your hosting platform
+
+## 📖 API Documentation
+
+Interactive API documentation is available at `/api/docs` when the application is running. The Swagger UI provides:
+- Complete endpoint documentation
+- Request/response schemas
+- Try-it-out functionality
+- Authentication testing
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the UNLICENSED License.
+
+## 🆘 Support
+
+For support, please open an issue in the repository or contact the development team.
+
+## 🔗 Useful Links
+
+- [NestJS Documentation](https://docs.nestjs.com/)
+- [TypeORM Documentation](https://typeorm.io/)
+- [Supabase Documentation](https://supabase.com/docs)
+- [Swagger/OpenAPI Documentation](https://swagger.io/docs/)
+
+---
+
+**Last Updated**: 2024
+**Version**: 1.0.0

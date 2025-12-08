@@ -46,6 +46,13 @@ lerna-debug.log*
 .temp
 .tmp
 
+# Uploaded files
+uploads/
+
+# Backup files
+*.backup
+.env.backup
+
 # Runtime data
 pids
 *.pid
@@ -54,3 +61,15 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+
+GMAIL_SECRET.md
+FRONTEND_PASSWORD_RESET_GUIDE.md
+EMAIL_SETUP.md
+add-email-config.js
+FRONTEND_QUICK_REFERENCE.md
+GMAIL_SETUP.md
+PASSWORD_RESET_EXPLANATION.md
+PROJECT_SUMMARY.md
+SETUP.md
+SPECS.md
