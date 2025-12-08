@@ -19,6 +19,7 @@ import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto, UserResponseDto } from './dto/auth-response.dto';
 import { jwtConfig } from '../config/jwt.config';
 import { EmailService } from '../common/services/email.service';
+import { WalletService } from '../common/services/wallet.service';
 
 @Injectable()
 export class AuthService {
@@ -32,6 +33,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailService: EmailService,
+    private walletService: WalletService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
@@ -49,7 +51,7 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user (temporarily to get ID for wallet generation)
     const user = this.userRepository.create({
       ...userData,
       email,
@@ -58,13 +60,32 @@ export class AuthService {
 
     const savedUser = await this.userRepository.save(user);
 
-    // Generate JWT token
-    const token = this.generateToken(savedUser);
+    // Generate wallet address for user
+    try {
+      const { address } = this.walletService.generateWalletFromUserId(savedUser.id);
+      savedUser.walletAddress = address;
+      const userWithWallet = await this.userRepository.save(savedUser);
+      this.logger.log(`Generated wallet ${address} for user ${savedUser.id}`);
 
-    return {
-      user: UserResponseDto.fromEntity(savedUser),
-      token,
-    };
+      // Generate JWT token
+      const token = this.generateToken(userWithWallet);
+
+      return {
+        user: UserResponseDto.fromEntity(userWithWallet),
+        token,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to generate wallet for user ${savedUser.id}:`, error);
+      // Continue without wallet - user can still be created
+      
+      // Generate JWT token
+      const token = this.generateToken(savedUser);
+
+      return {
+        user: UserResponseDto.fromEntity(savedUser),
+        token,
+      };
+    }
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {

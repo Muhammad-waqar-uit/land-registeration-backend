@@ -6,6 +6,7 @@ A comprehensive backend API for land registration and management built with **Ne
 
 - **Authentication & Authorization**: JWT-based authentication with role-based access control (Admin, Seller, Buyer, Builder)
 - **User Management**: Registration, login, profile management, password update, and password reset via email
+- **HD Wallet System**: Automatic Ethereum-compatible wallet address generation for each user using HD wallets
 - **Land Management**: Full CRUD operations for land listings with file upload support
 - **Payment Processing**: Payment creation, verification, and tracking with multiple payment modes
 - **Reservation System**: Land reservation functionality with status management
@@ -225,6 +226,7 @@ src/
 - email (string, unique)
 - password (string, hashed)
 - role (enum: admin, seller, buyer, builder)
+- walletAddress (string, unique, nullable) - Ethereum-compatible wallet address
 - createdAt, updatedAt
 
 ### Land Entity
@@ -414,6 +416,7 @@ Interactive API documentation is available at `/api/docs` when the application i
 - `FRONTEND_QUICK_REFERENCE.md` - Quick API reference for frontend developers
 - `GMAIL_SETUP.md` - Detailed Gmail SMTP setup instructions
 - `GMAIL_TROUBLESHOOTING.md` - Troubleshooting Gmail authentication issues
+- `WALLET_SETUP.md` - HD Wallet setup and configuration guide
 - `SETUP.md` - Detailed setup guide
 
 ## 🤝 Contributing

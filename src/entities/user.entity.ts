@@ -38,6 +38,9 @@ export class User {
   })
   role: UserRole;
 
+  @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
+  walletAddress: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
