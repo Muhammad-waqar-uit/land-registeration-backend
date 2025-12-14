@@ -47,15 +47,21 @@ export class WalletService {
     derivationPath: string;
   } {
     try {
+      if (!this.masterWallet) {
+        throw new Error('Master wallet not initialized');
+      }
+
       // Derive wallet using BIP44 path: m/44'/60'/0'/0/{index}
       // 44' = BIP44, 60' = Ethereum, 0' = account, 0 = change, {index} = address index
       const derivationPath = `m/44'/60'/0'/0/${userIdIndex}`;
       
-      // Create HD node from mnemonic
-      const hdNode = ethers.HDNodeWallet.fromPhrase(this.masterMnemonic);
-      
-      // Derive the specific wallet using the full path
-      const derivedWallet = hdNode.derivePath(derivationPath);
+      // Derive step by step from master wallet
+      // First derive to the account level: m/44'/60'/0'
+      const accountWallet = this.masterWallet.derivePath(`44'/60'/0'`);
+      // Then derive to change level: 0
+      const changeWallet = accountWallet.derivePath('0');
+      // Finally derive to the specific address index
+      const derivedWallet = changeWallet.derivePath(userIdIndex.toString());
       const address = derivedWallet.address;
 
       this.logger.log(`Generated wallet for user index ${userIdIndex}: ${address}`);

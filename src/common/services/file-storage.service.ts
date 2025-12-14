@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { writeFile, unlink, mkdir } from 'fs/promises';
+import { writeFile, unlink, mkdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
@@ -66,5 +66,21 @@ export class FileStorageService {
 
   async getPublicUrl(bucket: string, fileName: string): Promise<string> {
     return `/uploads/${bucket}/${fileName}`;
+  }
+
+  /**
+   * Read file from storage
+   * @param bucket - Bucket name (e.g., 'land-documents', 'land-images')
+   * @param filePath - Relative path from bucket (e.g., '1234567890-document.pdf')
+   * @returns File buffer
+   */
+  async readFile(bucket: string, filePath: string): Promise<Buffer> {
+    const fullPath = join(this.uploadDir, bucket, filePath);
+    
+    if (!existsSync(fullPath)) {
+      throw new Error(`File not found: ${fullPath}`);
+    }
+
+    return await readFile(fullPath);
   }
 }

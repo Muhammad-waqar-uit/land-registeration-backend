@@ -24,6 +24,13 @@ class BuyerInfoDto {
 
   @ApiProperty()
   email: string;
+
+  @ApiProperty({
+    description: 'Wallet address (Ethereum-compatible)',
+    example: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    nullable: true,
+  })
+  walletAddress: string | null;
 }
 
 export class ReservationResponseDto {
@@ -79,6 +86,7 @@ export class ReservationResponseDto {
           id: reservation.buyer.id,
           name: reservation.buyer.name,
           email: reservation.buyer.email,
+          walletAddress: reservation.buyer.walletAddress,
         };
       }
     }

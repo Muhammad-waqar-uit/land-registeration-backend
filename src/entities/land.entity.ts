@@ -43,10 +43,28 @@ export class Land {
   status: LandStatus;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  documentHash: string;
+  documentCID: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  documentUrl: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  documentCID: string;
+  imageCID: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  imageUrl: string;
+
+  @Column({ type: 'text', nullable: true })
+  documentIPFSHash: string;
+
+  @Column({ type: 'text', nullable: true })
+  imageIPFSHash: string;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  documentHash: string; // SHA-256 hash for tamper detection
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  imageHash: string; // SHA-256 hash for tamper detection
 
   @Column({ type: 'uuid' })
   ownerId: string;

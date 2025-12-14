@@ -38,9 +38,4 @@ export class UpdateLandDto {
   @IsOptional()
   @IsEnum(LandStatus)
   status?: LandStatus;
-
-  @ApiProperty({ description: 'Document hash', example: 'abc123', required: false })
-  @IsOptional()
-  @IsString()
-  documentHash?: string;
 }

@@ -48,13 +48,4 @@ export class CreateLandDto {
   @IsNumber()
   @Min(0.01)
   price: number;
-
-  @ApiProperty({
-    description: 'Document hash (optional)',
-    example: 'abc123',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  documentHash?: string;
 }

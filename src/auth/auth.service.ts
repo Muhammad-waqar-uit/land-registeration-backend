@@ -95,6 +95,7 @@ export class AuthService {
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
+      .addSelect('user.walletAddress')
       .where('user.email = :email', { email })
       .getOne();
 
@@ -142,6 +143,7 @@ export class AuthService {
   async getCurrentUser(userId: string): Promise<UserResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
+      select: ['id', 'name', 'email', 'role', 'walletAddress', 'createdAt', 'updatedAt'],
     });
 
     if (!user) {
@@ -157,6 +159,7 @@ export class AuthService {
   ): Promise<UserResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
+      select: ['id', 'name', 'email', 'role', 'walletAddress', 'createdAt', 'updatedAt'],
     });
 
     if (!user) {

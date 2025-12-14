@@ -88,33 +88,34 @@ export class PaymentsController {
 
   @Get('pending')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUILDER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get all pending payments (for verification)' })
+  @Roles(UserRole.SELLER)
+  @ApiOperation({ summary: 'Get pending payments for seller\'s lands (for verification)' })
   @ApiResponse({
     status: 200,
-    description: 'List of pending payments',
+    description: 'List of pending payments for seller\'s lands',
     type: [PaymentResponseDto],
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Builder/Admin only' })
-  findPendingPayments() {
-    return this.paymentsService.findPendingPayments();
+  @ApiResponse({ status: 403, description: 'Forbidden - Seller only' })
+  findPendingPayments(@CurrentUser() user: User) {
+    return this.paymentsService.findPendingPaymentsForSeller(user.id);
   }
 
   @Post(':id/verify')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUILDER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Verify or reject a payment' })
+  @Roles(UserRole.SELLER)
+  @ApiOperation({ summary: 'Verify or reject a payment (Seller only - for own lands)' })
   @ApiResponse({
     status: 200,
     description: 'Payment verification result',
     type: PaymentResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Builder/Admin only' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Seller only, or payment not for your land' })
   @ApiResponse({ status: 404, description: 'Payment not found' })
   verify(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() verifyPaymentDto: VerifyPaymentDto,
+    @CurrentUser() user: User,
   ) {
-    return this.paymentsService.verify(id, verifyPaymentDto);
+    return this.paymentsService.verify(id, verifyPaymentDto, user.id);
   }
 }

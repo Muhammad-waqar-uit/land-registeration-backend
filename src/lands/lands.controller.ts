@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
   Query,
   ParseUUIDPipe,
@@ -22,12 +23,13 @@ import {
   ApiBody,
   ApiQuery,
 } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { LandsService } from './lands.service';
 import { CreateLandDto } from './dto/create-land.dto';
 import { UpdateLandDto } from './dto/update-land.dto';
 import { QueryLandsDto } from './dto/query-lands.dto';
 import { LandResponseDto } from './dto/land-response.dto';
+import { VerificationResponseDto } from './dto/verification-response.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -67,7 +69,12 @@ export class LandsController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SELLER)
-  @UseInterceptors(FileInterceptor('document'))
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'document', maxCount: 1 },
+      { name: 'image', maxCount: 1 },
+    ]),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Create a new land listing' })
   @ApiBody({
@@ -78,11 +85,15 @@ export class LandsController {
         location: { type: 'string', example: '123 Ocean Drive, Miami' },
         size: { type: 'number', example: 500.5 },
         price: { type: 'number', example: 250000.0 },
-        documentHash: { type: 'string' },
         document: {
           type: 'string',
           format: 'binary',
           description: 'Land document file (PDF/image)',
+        },
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Land image file (JPG/PNG)',
         },
       },
     },
@@ -95,16 +106,34 @@ export class LandsController {
   @ApiResponse({ status: 403, description: 'Forbidden - Seller/Admin only' })
   create(
     @Body() createLandDto: CreateLandDto,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      document?: Express.Multer.File[];
+      image?: Express.Multer.File[];
+    },
     @CurrentUser() user: User,
   ) {
-    return this.landsService.create(createLandDto, file, user.id);
+    const documentFile = files?.document?.[0];
+    const imageFile = files?.image?.[0];
+    return this.landsService.create(
+      createLandDto,
+      documentFile,
+      imageFile,
+      user.id,
+    );
   }
 
   @Patch(':id')
-  @UseInterceptors(FileInterceptor('document'))
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SELLER)
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'document', maxCount: 1 },
+      { name: 'image', maxCount: 1 },
+    ]),
+  )
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Update land listing' })
+  @ApiOperation({ summary: 'Update land listing (Owner/Admin only)' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -117,11 +146,15 @@ export class LandsController {
           type: 'string',
           enum: ['available', 'locked', 'sold'],
         },
-        documentHash: { type: 'string' },
         document: {
           type: 'string',
           format: 'binary',
           description: 'Land document file (PDF/image)',
+        },
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Land image file (JPG/PNG)',
         },
       },
       required: [],
@@ -137,14 +170,29 @@ export class LandsController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateLandDto: UpdateLandDto,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      document?: Express.Multer.File[];
+      image?: Express.Multer.File[];
+    },
     @CurrentUser() user: User,
   ) {
-    return this.landsService.update(id, updateLandDto, file, user.id, user.role);
+    const documentFile = files?.document?.[0];
+    const imageFile = files?.image?.[0];
+    return this.landsService.update(
+      id,
+      updateLandDto,
+      documentFile,
+      imageFile,
+      user.id,
+      user.role,
+    );
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete land listing' })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SELLER)
+  @ApiOperation({ summary: 'Delete land listing (Owner/Admin only)' })
   @ApiResponse({
     status: 200,
     description: 'Land successfully deleted',
@@ -165,5 +213,19 @@ export class LandsController {
     return {
       message: 'Land deleted successfully',
     };
+  }
+
+  @Post(':id/verify')
+  @ApiOperation({ summary: 'Verify document and image integrity using SHA-256 hash' })
+  @ApiResponse({
+    status: 200,
+    description: 'Verification result for both document and image',
+    type: VerificationResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Land not found' })
+  async verifyDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<VerificationResponseDto> {
+    return this.landsService.verifyDocumentIntegrity(id);
   }
 }

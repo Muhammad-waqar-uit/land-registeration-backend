@@ -70,12 +70,17 @@ export class PaymentsService {
     );
   }
 
-  async findPendingPayments(): Promise<PaymentResponseDto[]> {
-    const payments = await this.paymentRepository.find({
-      where: { status: PaymentStatus.PENDING },
-      relations: ['buyer', 'land'],
-      order: { createdAt: 'DESC' },
-    });
+  async findPendingPaymentsForSeller(sellerId: string): Promise<PaymentResponseDto[]> {
+    // Find all pending payments for lands owned by this seller
+    const payments = await this.paymentRepository
+      .createQueryBuilder('payment')
+      .innerJoin('payment.land', 'land')
+      .leftJoinAndSelect('payment.buyer', 'buyer')
+      .leftJoinAndSelect('payment.land', 'landData')
+      .where('payment.status = :status', { status: PaymentStatus.PENDING })
+      .andWhere('land.ownerId = :sellerId', { sellerId })
+      .orderBy('payment.createdAt', 'DESC')
+      .getMany();
 
     return payments.map((payment) =>
       PaymentResponseDto.fromEntity(payment, true),
@@ -98,10 +103,11 @@ export class PaymentsService {
   async verify(
     id: string,
     verifyPaymentDto: VerifyPaymentDto,
+    sellerId: string,
   ): Promise<PaymentResponseDto> {
     const payment = await this.paymentRepository.findOne({
       where: { id },
-      relations: ['land'],
+      relations: ['land', 'land.owner'],
     });
 
     if (!payment) {
@@ -110,6 +116,11 @@ export class PaymentsService {
 
     if (payment.status !== PaymentStatus.PENDING) {
       throw new BadRequestException('Payment has already been processed');
+    }
+
+    // Verify that the seller owns the land for this payment
+    if (payment.land.ownerId !== sellerId) {
+      throw new ForbiddenException('You can only verify payments for your own lands');
     }
 
     // Update payment status

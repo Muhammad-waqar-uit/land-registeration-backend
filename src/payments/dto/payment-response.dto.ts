@@ -23,6 +23,13 @@ class BuyerInfoDto {
 
   @ApiProperty()
   email: string;
+
+  @ApiProperty({
+    description: 'Wallet address (Ethereum-compatible)',
+    example: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    nullable: true,
+  })
+  walletAddress: string | null;
 }
 
 export class PaymentResponseDto {
@@ -101,6 +108,7 @@ export class PaymentResponseDto {
           id: payment.buyer.id,
           name: payment.buyer.name,
           email: payment.buyer.email,
+          walletAddress: payment.buyer.walletAddress,
         };
       }
     }
