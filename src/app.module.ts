@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { databaseConfig } from './config/database.config';
@@ -8,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { LandsModule } from './lands/lands.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ReservationsModule } from './reservations/reservations.module';
+import { ContactModule } from './contact/contact.module';
 import { CommonModule } from './common/common.module';
 
 @Module({
@@ -17,10 +19,12 @@ import { CommonModule } from './common/common.module';
       envFilePath: '.env',
     }),
     TypeOrmModule.forRoot(databaseConfig),
+    ScheduleModule.forRoot(),
     AuthModule,
     LandsModule,
     PaymentsModule,
     ReservationsModule,
+    ContactModule,
     CommonModule,
   ],
   controllers: [AppController],

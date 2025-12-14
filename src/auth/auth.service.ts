@@ -109,6 +109,27 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Generate wallet if user doesn't have one (for old accounts)
+    if (!user.walletAddress) {
+      try {
+        const { address } = this.walletService.generateWalletFromUserId(user.id);
+        user.walletAddress = address;
+        const userWithWallet = await this.userRepository.save(user);
+        this.logger.log(`Generated wallet ${address} for existing user ${user.id} on login`);
+        
+        // Generate JWT token
+        const token = this.generateToken(userWithWallet);
+
+        return {
+          user: UserResponseDto.fromEntity(userWithWallet),
+          token,
+        };
+      } catch (error) {
+        this.logger.error(`Failed to generate wallet for user ${user.id} on login:`, error);
+        // Continue without wallet - user can still login
+      }
+    }
+
     // Generate JWT token
     const token = this.generateToken(user);
 

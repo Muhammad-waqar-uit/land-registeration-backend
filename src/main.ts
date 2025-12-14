@@ -40,6 +40,7 @@ async function bootstrap() {
     .addTag('Lands', 'Land management endpoints')
     .addTag('Payments', 'Payment processing endpoints')
     .addTag('Reservations', 'Land reservation endpoints')
+    .addTag('Contact', 'Contact form endpoints')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
