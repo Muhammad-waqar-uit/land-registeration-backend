@@ -8,8 +8,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Reservation, ReservationStatus } from '../entities/reservation.entity';
 import { Land, LandStatus } from '../entities/land.entity';
+import { User } from '../entities/user.entity';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { ReservationResponseDto } from './dto/reservation-response.dto';
+import { BlockchainService } from '../common/services/blockchain.service';
 
 @Injectable()
 export class ReservationsService {
@@ -18,6 +20,9 @@ export class ReservationsService {
     private reservationRepository: Repository<Reservation>,
     @InjectRepository(Land)
     private landRepository: Repository<Land>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    private blockchainService: BlockchainService,
   ) {}
 
   async create(
@@ -55,7 +60,47 @@ export class ReservationsService {
       );
     }
 
-    // Lock the land
+    // Get buyer user to get wallet address
+    const buyer = await this.userRepository.findOne({
+      where: { id: buyerId },
+      select: ['id', 'walletAddress'],
+    });
+
+    if (!buyer) {
+      throw new NotFoundException('Buyer not found');
+    }
+
+    if (!buyer.walletAddress) {
+      throw new ConflictException(
+        'Buyer must have a wallet address to reserve land',
+      );
+    }
+
+    // Lock the land on blockchain (if blockchain is configured and land is registered)
+    if (
+      this.blockchainService.isContractAvailable() &&
+      land.blockchainLandId
+    ) {
+      try {
+        const lockResult = await this.blockchainService.lockLandToBuyer(
+          land.blockchainLandId,
+          buyer.walletAddress,
+        );
+
+        if (!lockResult.success) {
+          // Log error but don't fail the reservation
+          console.error(
+            'Failed to lock land on blockchain:',
+            lockResult.error,
+          );
+        }
+      } catch (error) {
+        // Log error but don't fail the reservation
+        console.error('Error locking land on blockchain:', error);
+      }
+    }
+
+    // Lock the land in database
     land.status = LandStatus.LOCKED;
     await this.landRepository.save(land);
 

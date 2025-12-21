@@ -6,12 +6,19 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Payment, PaymentStatus } from '../entities/payment.entity';
+import {
+  Payment,
+  PaymentStatus,
+  PaymentMode,
+} from '../entities/payment.entity';
 import { Land, LandStatus } from '../entities/land.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { PaymentResponseDto } from './dto/payment-response.dto';
 import { FileStorageService } from '../common/services/file-storage.service';
+import { BlockchainService } from '../common/services/blockchain.service';
+import { WalletService } from '../common/services/wallet.service';
+import { User } from '../entities/user.entity';
 
 @Injectable()
 export class PaymentsService {
@@ -20,7 +27,11 @@ export class PaymentsService {
     private paymentRepository: Repository<Payment>,
     @InjectRepository(Land)
     private landRepository: Repository<Land>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private fileStorageService: FileStorageService,
+    private blockchainService: BlockchainService,
+    private walletService: WalletService,
   ) {}
 
   async create(
@@ -38,6 +49,7 @@ export class PaymentsService {
     }
 
     let proofCID: string | undefined;
+    let transactionHash: string | undefined;
 
     // Upload proof file if provided
     if (file) {
@@ -48,10 +60,68 @@ export class PaymentsService {
       proofCID = uploadResult.path;
     }
 
+    // Process ERC20 payment on blockchain if payment mode is crypto
+    if (
+      createPaymentDto.paymentMode === PaymentMode.CRYPTO &&
+      land.blockchainLandId &&
+      this.blockchainService.isContractAvailable()
+    ) {
+      try {
+        // Get buyer user to get wallet address
+        const buyer = await this.userRepository.findOne({
+          where: { id: buyerId },
+          select: ['id', 'walletAddress'],
+        });
+
+        if (!buyer) {
+          throw new NotFoundException('Buyer not found');
+        }
+
+        if (!buyer.walletAddress) {
+          throw new BadRequestException(
+            'Buyer must have a wallet address for crypto payments',
+          );
+        }
+
+        // Get buyer's private key from HD wallet
+        const buyerPrivateKey =
+          this.walletService.getPrivateKeyFromUserId(buyerId);
+
+        // Convert amount to base units (assuming 18 decimals, will be adjusted in blockchain service)
+        const amountInBaseUnits = BigInt(
+          Math.floor(createPaymentDto.amount * 1e18),
+        );
+
+        // Make payment on blockchain
+        const paymentResult = await this.blockchainService.makeERC20Payment(
+          land.blockchainLandId,
+          buyerPrivateKey,
+          amountInBaseUnits,
+        );
+
+        if (paymentResult.success && paymentResult.transactionHash) {
+          transactionHash = paymentResult.transactionHash;
+          console.log(
+            `ERC20 payment processed on blockchain. TX: ${paymentResult.transactionHash}`,
+          );
+        } else {
+          console.error(
+            'Failed to process ERC20 payment on blockchain:',
+            paymentResult.error,
+          );
+          // Continue with database payment record even if blockchain fails
+        }
+      } catch (error) {
+        console.error('Error processing ERC20 payment:', error);
+        // Continue with database payment record even if blockchain fails
+      }
+    }
+
     const payment = this.paymentRepository.create({
       ...createPaymentDto,
       buyerId,
       proofCID,
+      transactionHash,
     });
 
     const savedPayment = await this.paymentRepository.save(payment);

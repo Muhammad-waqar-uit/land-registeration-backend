@@ -17,6 +17,8 @@ import { LandResponseDto } from './dto/land-response.dto';
 import { FileStorageService } from '../common/services/file-storage.service';
 import { IpfsService } from '../common/services/ipfs.service';
 import { HashService } from '../common/services/hash.service';
+import { BlockchainService } from '../common/services/blockchain.service';
+import { ethers } from 'ethers';
 
 @Injectable()
 export class LandsService {
@@ -27,9 +29,12 @@ export class LandsService {
     private reservationRepository: Repository<Reservation>,
     @InjectRepository(Payment)
     private paymentRepository: Repository<Payment>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private fileStorageService: FileStorageService,
     private ipfsService: IpfsService,
     private hashService: HashService,
+    private blockchainService: BlockchainService,
   ) {}
 
   async findAll(query: QueryLandsDto): Promise<{
@@ -153,6 +158,58 @@ export class LandsService {
       }
     }
 
+    // Get owner user to get wallet address
+    const owner = await this.userRepository.findOne({
+      where: { id: ownerId },
+      select: ['id', 'walletAddress'],
+    });
+
+    if (!owner) {
+      throw new NotFoundException('Owner not found');
+    }
+
+    if (!owner.walletAddress) {
+      throw new BadRequestException(
+        'Owner must have a wallet address to register land on blockchain',
+      );
+    }
+
+    // Prepare IPFS hash (use document IPFS hash if available, otherwise empty string)
+    const ipfsHash = documentIPFSHash || imageIPFSHash || '';
+
+    // Convert price to wei (assuming price is in base currency, adjust if needed)
+    // For now, we'll use the price as-is (you may need to adjust based on your token decimals)
+    const priceInWei = BigInt(Math.floor(createLandDto.price * 1e18)); // Assuming 18 decimals
+
+    // Register land on blockchain (if blockchain is configured)
+    let blockchainLandId: number | undefined;
+    let blockchainTxHash: string | undefined;
+
+    if (this.blockchainService.isContractAvailable() && documentHash) {
+      try {
+        const blockchainResult = await this.blockchainService.registerLand(
+          owner.walletAddress,
+          ipfsHash,
+          documentHash,
+          priceInWei,
+        );
+
+        if (blockchainResult.success) {
+          blockchainLandId = blockchainResult.landId;
+          blockchainTxHash = blockchainResult.transactionHash;
+        } else {
+          // Log error but don't fail the land creation
+          console.error(
+            'Failed to register land on blockchain:',
+            blockchainResult.error,
+          );
+        }
+      } catch (error) {
+        // Log error but don't fail the land creation
+        console.error('Error registering land on blockchain:', error);
+      }
+    }
+
     const land = this.landRepository.create({
       ...createLandDto,
       ownerId,
@@ -164,6 +221,8 @@ export class LandsService {
       imageUrl,
       imageIPFSHash,
       imageHash,
+      blockchainLandId,
+      blockchainTxHash,
     });
 
     const savedLand = await this.landRepository.save(land);
@@ -302,6 +361,65 @@ export class LandsService {
         );
       } catch (error) {
         console.error('Failed to upload image to IPFS:', error);
+      }
+    }
+
+    // Update blockchain if land is registered and changes are made
+    let newDocumentHash: string | undefined;
+    let newIpfsHash: string | undefined;
+    let newPrice: bigint | undefined;
+
+    // Check if document was updated
+    if (documentFile && land.documentHash) {
+      newDocumentHash = land.documentHash; // Already calculated above
+    }
+
+    // Check if IPFS hash was updated
+    if (land.documentIPFSHash) {
+      newIpfsHash = land.documentIPFSHash;
+    } else if (land.imageIPFSHash) {
+      newIpfsHash = land.imageIPFSHash;
+    }
+
+    // Check if price was updated
+    if (updateLandDto.price !== undefined) {
+      newPrice = BigInt(Math.floor(updateLandDto.price * 1e18));
+    }
+
+    // Update blockchain if configured and land is registered
+    if (
+      this.blockchainService.isContractAvailable() &&
+      land.blockchainLandId &&
+      (newDocumentHash || newIpfsHash || newPrice)
+    ) {
+      try {
+        const updateResult = await this.blockchainService.updateLand(
+          land.blockchainLandId,
+          newIpfsHash || '',
+          newDocumentHash || '',
+          newPrice || BigInt(0),
+        );
+
+        if (updateResult.success && updateResult.transactionHash) {
+          // Store update transaction hash (could add a separate field for this)
+          // For now, we'll note it in logs
+          console.log(
+            `Land ${land.id} updated on blockchain. TX: ${updateResult.transactionHash}`,
+          );
+          if (updateResult.requiresSellerApproval) {
+            console.log(
+              `⚠️ Document hash change requires seller approval for land ${land.id}`,
+            );
+          }
+        } else {
+          console.error(
+            'Failed to update land on blockchain:',
+            updateResult.error,
+          );
+        }
+      } catch (error) {
+        // Log error but don't fail the update
+        console.error('Error updating land on blockchain:', error);
       }
     }
 
@@ -524,5 +642,96 @@ export class LandsService {
     }
 
     return result;
+  }
+
+  /**
+   * Verify document hash against blockchain
+   * @param landId - Database land ID
+   * @returns Verification result comparing database hash with blockchain hash
+   */
+  async verifyBlockchainHash(landId: string): Promise<{
+    verified: boolean;
+    message: string;
+    databaseHash?: string;
+    blockchainHash?: string;
+    blockchainLandId?: number;
+    error?: string;
+  }> {
+    const land = await this.landRepository.findOne({
+      where: { id: landId },
+    });
+
+    if (!land) {
+      return {
+        verified: false,
+        message: 'Land not found',
+      };
+    }
+
+    if (!land.blockchainLandId) {
+      return {
+        verified: false,
+        message: 'Land is not registered on blockchain',
+      };
+    }
+
+    if (!land.documentHash) {
+      return {
+        verified: false,
+        message: 'Document hash not available in database',
+      };
+    }
+
+    if (!this.blockchainService.isContractAvailable()) {
+      return {
+        verified: false,
+        message: 'Blockchain service not available. Please configure blockchain settings.',
+      };
+    }
+
+    try {
+      const verified = await this.blockchainService.verifyDocumentHash(
+        land.blockchainLandId,
+        land.documentHash,
+      );
+
+      if (verified) {
+        // Get blockchain hash for comparison display
+        const blockchainData = await this.blockchainService.getLandFromBlockchain(
+          land.blockchainLandId,
+        );
+
+        return {
+          verified: true,
+          message: 'Document hash matches blockchain record. Document is authentic.',
+          databaseHash: land.documentHash,
+          blockchainHash: blockchainData
+            ? ethers.hexlify(blockchainData.documentHash)
+            : undefined,
+          blockchainLandId: land.blockchainLandId,
+        };
+      } else {
+        const blockchainData = await this.blockchainService.getLandFromBlockchain(
+          land.blockchainLandId,
+        );
+
+        return {
+          verified: false,
+          message: 'Document hash does not match blockchain record. Document may have been tampered with.',
+          databaseHash: land.documentHash,
+          blockchainHash: blockchainData
+            ? ethers.hexlify(blockchainData.documentHash)
+            : undefined,
+          blockchainLandId: land.blockchainLandId,
+        };
+      }
+    } catch (error) {
+      return {
+        verified: false,
+        message: `Error verifying against blockchain: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        blockchainLandId: land.blockchainLandId,
+      };
+    }
   }
 }

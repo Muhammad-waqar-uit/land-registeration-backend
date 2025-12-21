@@ -130,4 +130,68 @@ export class WalletService {
       return false;
     }
   }
+
+  /**
+   * Get private key from user ID
+   * @param userId - User ID (UUID)
+   * @returns Private key (for signing transactions)
+   * 
+   * @dev SECURITY WARNING:
+   *      - Private keys should be handled securely
+   *      - Only use for backend-managed transactions
+   *      - Never expose private keys to frontend or logs
+   *      - Store securely and never commit to version control
+   */
+  getPrivateKeyFromUserId(userId: string): string {
+    if (!this.masterWallet) {
+      throw new Error('Master wallet not initialized');
+    }
+
+    try {
+      // Derive wallet using the same logic as generateWalletFromUserId
+      const userIdHash = userId.replace(/-/g, '');
+      const numericIndex =
+        parseInt(userIdHash.substring(0, 8), 16) % 2147483647; // Max safe integer for BIP44
+
+      // Derive step by step from master wallet
+      const accountWallet = this.masterWallet.derivePath(`44'/60'/0'`);
+      const changeWallet = accountWallet.derivePath('0');
+      const derivedWallet = changeWallet.derivePath(numericIndex.toString());
+
+      this.logger.log(
+        `Retrieved private key for user ${userId} (address: ${derivedWallet.address})`,
+      );
+
+      return derivedWallet.privateKey;
+    } catch (error) {
+      this.logger.error(`Failed to get private key for user ${userId}:`, error);
+      throw new Error('Failed to get user private key');
+    }
+  }
+
+  /**
+   * Get private key from wallet address (requires user ID lookup)
+   * @param walletAddress - User's wallet address
+   * @param userId - User ID (required to derive private key)
+   * @returns Private key
+   * 
+   * @dev NOTE: This method requires userId because we need to know the derivation path.
+   *      If you only have the address, you'll need to look up the userId first.
+   */
+  getPrivateKeyFromAddress(
+    walletAddress: string,
+    userId: string,
+  ): string {
+    // First verify the address matches
+    const privateKey = this.getPrivateKeyFromUserId(userId);
+    const derivedWallet = new ethers.Wallet(privateKey);
+    
+    if (derivedWallet.address.toLowerCase() !== walletAddress.toLowerCase()) {
+      throw new Error(
+        `Wallet address mismatch. Expected ${walletAddress}, got ${derivedWallet.address}`,
+      );
+    }
+
+    return privateKey;
+  }
 }

@@ -80,6 +80,20 @@ export class LandResponseDto {
   })
   imageHash?: string;
 
+  @ApiProperty({
+    description: 'Blockchain land ID (from smart contract)',
+    example: 1,
+    required: false,
+  })
+  blockchainLandId?: number;
+
+  @ApiProperty({
+    description: 'Blockchain transaction hash when land was registered',
+    example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    required: false,
+  })
+  blockchainTxHash?: string;
+
   @ApiProperty({ description: 'Creation date' })
   createdAt: Date;
 
@@ -106,6 +120,8 @@ export class LandResponseDto {
       imageUrl: land.imageUrl,
       imageIPFSHash: land.imageIPFSHash,
       imageHash: land.imageHash,
+      blockchainLandId: land.blockchainLandId,
+      blockchainTxHash: land.blockchainTxHash,
       createdAt: land.createdAt,
       updatedAt: land.updatedAt,
     };

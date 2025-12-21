@@ -69,6 +69,13 @@ export class Land {
   @Column({ type: 'uuid' })
   ownerId: string;
 
+  // Blockchain fields
+  @Column({ type: 'integer', nullable: true })
+  blockchainLandId: number; // Land ID on blockchain (from smart contract)
+
+  @Column({ type: 'varchar', length: 66, nullable: true })
+  blockchainTxHash: string; // Transaction hash when land was registered on blockchain
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -228,4 +228,28 @@ export class LandsController {
   ): Promise<VerificationResponseDto> {
     return this.landsService.verifyDocumentIntegrity(id);
   }
+
+  @Post(':id/verify-blockchain')
+  @ApiOperation({ summary: 'Verify document hash against blockchain record' })
+  @ApiResponse({
+    status: 200,
+    description: 'Blockchain verification result',
+    schema: {
+      type: 'object',
+      properties: {
+        verified: { type: 'boolean' },
+        message: { type: 'string' },
+        databaseHash: { type: 'string' },
+        blockchainHash: { type: 'string' },
+        blockchainLandId: { type: 'number' },
+        error: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Land not found' })
+  async verifyBlockchain(
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.landsService.verifyBlockchainHash(id);
+  }
 }
