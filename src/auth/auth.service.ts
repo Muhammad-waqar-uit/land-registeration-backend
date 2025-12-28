@@ -14,9 +14,11 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from '../entities/user.entity';
 import { PasswordResetToken } from '../entities/password-reset-token.entity';
+import { RefreshToken } from '../entities/refresh-token.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto, UserResponseDto } from './dto/auth-response.dto';
+import { RefreshTokenResponseDto } from './dto/refresh-token.dto';
 import { jwtConfig } from '../config/jwt.config';
 import { EmailService } from '../common/services/email.service';
 import { WalletService } from '../common/services/wallet.service';
@@ -30,6 +32,8 @@ export class AuthService {
     private userRepository: Repository<User>,
     @InjectRepository(PasswordResetToken)
     private resetTokenRepository: Repository<PasswordResetToken>,
+    @InjectRepository(RefreshToken)
+    private refreshTokenRepository: Repository<RefreshToken>,
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailService: EmailService,
@@ -63,27 +67,46 @@ export class AuthService {
     // Generate wallet address for user
     try {
       const { address } = this.walletService.generateWalletFromUserId(savedUser.id);
+      
+      // Check if address already exists (shouldn't happen, but safety check)
+      const existingUser = await this.userRepository.findOne({
+        where: { walletAddress: address },
+      });
+
+      if (existingUser) {
+        this.logger.warn(`Wallet address ${address} already exists, generating new one...`);
+        // Retry with a slight modification (shouldn't happen in practice)
+        throw new Error('Wallet address collision');
+      }
+
       savedUser.walletAddress = address;
       const userWithWallet = await this.userRepository.save(savedUser);
       this.logger.log(`Generated wallet ${address} for user ${savedUser.id}`);
 
-      // Generate JWT token
-      const token = this.generateToken(userWithWallet);
+      // Generate tokens
+      const accessToken = this.generateAccessToken(userWithWallet);
+      const refreshToken = await this.generateRefreshToken(userWithWallet.id);
 
       return {
         user: UserResponseDto.fromEntity(userWithWallet),
-        token,
+        token: accessToken, // Backward compatibility
+        accessToken,
+        refreshToken,
       };
     } catch (error) {
       this.logger.error(`Failed to generate wallet for user ${savedUser.id}:`, error);
       // Continue without wallet - user can still be created
+      // User can generate wallet later using /auth/wallet/generate endpoint
       
-      // Generate JWT token
-      const token = this.generateToken(savedUser);
+      // Generate tokens
+      const accessToken = this.generateAccessToken(savedUser);
+      const refreshToken = await this.generateRefreshToken(savedUser.id);
 
       return {
         user: UserResponseDto.fromEntity(savedUser),
-        token,
+        token: accessToken, // Backward compatibility
+        accessToken,
+        refreshToken,
       };
     }
   }
@@ -114,29 +137,47 @@ export class AuthService {
     if (!user.walletAddress) {
       try {
         const { address } = this.walletService.generateWalletFromUserId(user.id);
-        user.walletAddress = address;
-        const userWithWallet = await this.userRepository.save(user);
-        this.logger.log(`Generated wallet ${address} for existing user ${user.id} on login`);
         
-        // Generate JWT token
-        const token = this.generateToken(userWithWallet);
+        // Check if address already exists
+        const existingUser = await this.userRepository.findOne({
+          where: { walletAddress: address },
+        });
+
+        if (existingUser && existingUser.id !== user.id) {
+          this.logger.warn(`Wallet address ${address} already exists for another user`);
+          // Continue without wallet - user can generate later
+        } else {
+          user.walletAddress = address;
+          const userWithWallet = await this.userRepository.save(user);
+          this.logger.log(`Generated wallet ${address} for existing user ${user.id} on login`);
+          
+        // Generate tokens
+        const accessToken = this.generateAccessToken(userWithWallet);
+        const refreshToken = await this.generateRefreshToken(userWithWallet.id);
 
         return {
           user: UserResponseDto.fromEntity(userWithWallet),
-          token,
+          token: accessToken, // Backward compatibility
+          accessToken,
+          refreshToken,
         };
+        }
       } catch (error) {
         this.logger.error(`Failed to generate wallet for user ${user.id} on login:`, error);
         // Continue without wallet - user can still login
+        // User can generate wallet later using /auth/wallet/generate endpoint
       }
     }
 
-    // Generate JWT token
-    const token = this.generateToken(user);
+    // Generate tokens
+    const accessToken = this.generateAccessToken(user);
+    const refreshToken = await this.generateRefreshToken(user.id);
 
     return {
       user: UserResponseDto.fromEntity(user),
-      token,
+      token: accessToken, // Backward compatibility
+      accessToken,
+      refreshToken,
     };
   }
 
@@ -150,7 +191,57 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
+    // Generate wallet if missing
+    if (!user.walletAddress) {
+      try {
+        const { address } = this.walletService.generateWalletFromUserId(user.id);
+        user.walletAddress = address;
+        await this.userRepository.save(user);
+        this.logger.log(`Generated wallet ${address} for user ${user.id} on getCurrentUser`);
+      } catch (error) {
+        this.logger.error(`Failed to generate wallet for user ${user.id}:`, error);
+        // Continue without wallet
+      }
+    }
+
     return UserResponseDto.fromEntity(user);
+  }
+
+  async generateWallet(userId: string): Promise<UserResponseDto> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'name', 'email', 'role', 'walletAddress', 'createdAt', 'updatedAt'],
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Generate wallet address
+    try {
+      const { address } = this.walletService.generateWalletFromUserId(user.id);
+      
+      // Check if address already exists for another user
+      const existingUser = await this.userRepository.findOne({
+        where: { walletAddress: address },
+      });
+
+      if (existingUser && existingUser.id !== userId) {
+        throw new ConflictException('Wallet address already assigned to another user');
+      }
+
+      user.walletAddress = address;
+      const updatedUser = await this.userRepository.save(user);
+      this.logger.log(`Generated wallet ${address} for user ${userId}`);
+
+      return UserResponseDto.fromEntity(updatedUser);
+    } catch (error) {
+      this.logger.error(`Failed to generate wallet for user ${userId}:`, error);
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      throw new BadRequestException('Failed to generate wallet address. Please try again.');
+    }
   }
 
   async updateProfile(
@@ -353,17 +444,123 @@ export class AuthService {
     };
   }
 
-  private generateToken(user: User): string {
+  async refreshToken(refreshToken: string): Promise<RefreshTokenResponseDto> {
+    // Hash the provided token to match stored hash
+    const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
+    // Find token in database
+    const tokenRecord = await this.refreshTokenRepository.findOne({
+      where: { token: hashedToken, revoked: false },
+      relations: ['user'],
+    });
+
+    if (!tokenRecord) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    // Check if token is expired
+    if (tokenRecord.expiresAt < new Date()) {
+      // Mark as revoked
+      tokenRecord.revoked = true;
+      await this.refreshTokenRepository.save(tokenRecord);
+      throw new UnauthorizedException('Refresh token has expired');
+    }
+
+    // Get user
+    const user = await this.userRepository.findOne({
+      where: { id: tokenRecord.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Generate new access token
+    const accessToken = this.generateAccessToken(user);
+
+    // Optionally rotate refresh token (for better security)
+    const rotateRefreshToken = this.configService.get<string>('REFRESH_TOKEN_ROTATION') !== 'false';
+    
+    if (rotateRefreshToken) {
+      // Revoke old token
+      tokenRecord.revoked = true;
+      await this.refreshTokenRepository.save(tokenRecord);
+
+      // Generate new refresh token
+      const newRefreshToken = await this.generateRefreshToken(user.id);
+
+      return {
+        accessToken,
+        refreshToken: newRefreshToken,
+      };
+    }
+
+    return {
+      accessToken,
+    };
+  }
+
+  async revokeRefreshToken(refreshToken: string): Promise<void> {
+    const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
+    const tokenRecord = await this.refreshTokenRepository.findOne({
+      where: { token: hashedToken },
+    });
+
+    if (tokenRecord) {
+      tokenRecord.revoked = true;
+      await this.refreshTokenRepository.save(tokenRecord);
+    }
+  }
+
+  async revokeAllUserRefreshTokens(userId: string): Promise<void> {
+    await this.refreshTokenRepository.update(
+      { userId, revoked: false },
+      { revoked: true },
+    );
+  }
+
+  private generateAccessToken(user: User): string {
     const payload = {
       sub: user.id,
       email: user.email,
       role: user.role,
     };
 
-    const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || jwtConfig.expiresIn;
+    // Access token expires in 15 minutes to 1 hour (short-lived)
+    const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '1h';
     
     return this.jwtService.sign(payload, {
       expiresIn: expiresIn as any,
     });
+  }
+
+  private async generateRefreshToken(userId: string): Promise<string> {
+    // Generate random token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    // Set expiry to 7-30 days (long-lived)
+    const expiresInDays = parseInt(this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN_DAYS') || '7', 10);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+
+    // Store token in database
+    const refreshToken = this.refreshTokenRepository.create({
+      userId,
+      token: hashedToken,
+      expiresAt,
+      revoked: false,
+    });
+
+    await this.refreshTokenRepository.save(refreshToken);
+
+    // Clean up expired tokens
+    await this.refreshTokenRepository.delete({
+      expiresAt: LessThan(new Date()),
+    });
+
+    // Return raw token (only time it's visible)
+    return rawToken;
   }
 }

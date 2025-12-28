@@ -39,4 +39,10 @@ export class AuthResponseDto {
 
   @ApiProperty({ description: 'JWT access token', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
   token: string;
+
+  @ApiProperty({ description: 'JWT access token (alias for token)', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  accessToken: string;
+
+  @ApiProperty({ description: 'Refresh token for getting new access tokens', example: 'refresh-token-abc123xyz...' })
+  refreshToken: string;
 }

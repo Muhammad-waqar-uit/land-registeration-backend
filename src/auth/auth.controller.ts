@@ -22,6 +22,8 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto';
+import { LogoutDto } from './dto/logout.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -160,11 +162,45 @@ export class AuthController {
     );
   }
 
+  @Post('wallet/generate')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generate or update wallet address for current user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Wallet address generated successfully',
+    type: UserResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Failed to generate wallet' })
+  async generateWallet(@CurrentUser() user: User): Promise<UserResponseDto> {
+    return this.authService.generateWallet(user.id);
+  }
+
+  @Post('refresh-token')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiResponse({
+    status: 200,
+    description: 'New access token generated',
+    type: RefreshTokenResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
+  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
+    return this.authService.refreshToken(refreshTokenDto.refreshToken);
+  }
+
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Logout user' })
+  @ApiOperation({ summary: 'Logout user and optionally invalidate refresh token' })
+  @ApiBody({
+    type: LogoutDto,
+    required: false,
+  })
   @ApiResponse({
     status: 200,
     description: 'User successfully logged out',
@@ -175,7 +211,18 @@ export class AuthController {
       },
     },
   })
-  async logout() {
+  async logout(
+    @CurrentUser() user: User,
+    @Body() logoutDto?: LogoutDto,
+  ) {
+    // Invalidate refresh token if provided
+    if (logoutDto?.refreshToken) {
+      await this.authService.revokeRefreshToken(logoutDto.refreshToken);
+    }
+
+    // Optionally revoke all user refresh tokens (uncomment if needed)
+    // await this.authService.revokeAllUserRefreshTokens(user.id);
+
     return {
       message: 'Logged out successfully',
     };

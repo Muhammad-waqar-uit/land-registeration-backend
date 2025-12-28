@@ -42,15 +42,19 @@ export interface MakePaymentResult {
   error?: string;
 }
 
-// Smart Contract ABI (minimal - only functions we need)
+// Smart Contract ABI (updated for admin-only, address-parameter functions)
 const LAND_REGISTRY_ABI = [
   'function registerLand(address _owner, string memory _ipfsHash, bytes32 _documentHash, uint256 _totalPrice) external',
-  'function lockLandToBuyer(uint256 landId) external',
-  'function lockLandToBuyerFor(uint256 landId, address buyer) external',
+  'function lockLandToBuyer(uint256 landId, address buyer) external',
   'function updateLand(uint256 landId, string memory _ipfsHash, bytes32 _documentHash, uint256 _totalPrice) external',
-  'function sellerApproveUpdate(uint256 landId) external',
-  'function sellerRevokeUpdateApproval(uint256 landId) external',
-  'function makePayment(uint256 landId, uint256 amount) external',
+  'function sellerApproveUpdate(uint256 landId, address seller) external',
+  'function sellerRevokeUpdateApproval(uint256 landId, address seller) external',
+  'function makePayment(uint256 landId, address buyer, uint256 amount) external',
+  'function submitBankPayment(uint256 landId, address buyer, uint256 amount, string memory proofHash) external',
+  'function verifyBankPayment(uint256 landId, bool approved) external',
+  'function sellerApproveTransfer(uint256 landId, address seller) external',
+  'function sellerRevokeApproval(uint256 landId, address seller) external',
+  'function requestRefund(uint256 landId, address buyer) external',
   'function adminUnlockLand(uint256 landId) external',
   'function getPaymentBreakdown(uint256 landId) view returns (uint256 totalPaid, uint256 cryptoPaid, uint256 bankPaid, uint256 remaining)',
   'function lands(uint256) view returns (address owner, address seller, string memory ipfsHash, bytes32 documentHash, uint256 totalPrice, address lockedTo)',
@@ -341,8 +345,8 @@ export class BlockchainService {
     }
 
     try {
-      // Call lockLandToBuyerFor function (admin-only, backend calls on behalf of buyer)
-      const tx = await this.contract!.lockLandToBuyerFor(landId, buyerAddress);
+      // Call lockLandToBuyer function (admin-only, backend calls on behalf of buyer)
+      const tx = await this.contract!.lockLandToBuyer(landId, buyerAddress);
 
       this.logger.log(
         `Locking land ${landId} to buyer ${buyerAddress} on blockchain. Transaction: ${tx.hash}`,
@@ -701,16 +705,11 @@ export class BlockchainService {
         }
       }
 
-      // Create new contract instance with user's signer
-      const contractWithUserSigner = new ethers.Contract(
-        this.contractAddress!,
-        LAND_REGISTRY_ABI,
-        userSigner,
-      );
-
-      // Call makePayment on contract
-      const tx = await contractWithUserSigner.makePayment(
+      // Call makePayment on contract (admin calls on behalf of buyer)
+      // Note: Buyer must have approved tokens for the contract first
+      const tx = await this.contract!.makePayment(
         landId,
+        userSigner.address,
         amountWithDecimals,
       );
 
