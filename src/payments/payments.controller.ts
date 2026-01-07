@@ -37,7 +37,7 @@ export class PaymentsController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUYER)
+  @Roles(UserRole.USER, UserRole.BUILDER)
   @UseInterceptors(FileInterceptor('proof'))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Create a payment record' })
@@ -63,7 +63,7 @@ export class PaymentsController {
     description: 'Payment successfully created',
     type: PaymentResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Buyer only' })
+  @ApiResponse({ status: 403, description: 'Forbidden - User only' })
   create(
     @Body() createPaymentDto: CreatePaymentDto,
     @UploadedFile() file: Express.Multer.File,
@@ -74,21 +74,21 @@ export class PaymentsController {
 
   @Get('my-payments')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUYER)
-  @ApiOperation({ summary: 'Get payments for current buyer' })
+  @Roles(UserRole.USER)
+  @ApiOperation({ summary: 'Get payments for current user' })
   @ApiResponse({
     status: 200,
     description: 'List of payments',
     type: [PaymentResponseDto],
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Buyer only' })
+  @ApiResponse({ status: 403, description: 'Forbidden - User only' })
   findMyPayments(@CurrentUser() user: User) {
     return this.paymentsService.findMyPayments(user.id);
   }
 
   @Get('pending')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SELLER)
+  @Roles(UserRole.USER, UserRole.BUILDER)
   @ApiOperation({ summary: 'Get pending payments for seller\'s lands (for verification)' })
   @ApiResponse({
     status: 200,
@@ -102,7 +102,7 @@ export class PaymentsController {
 
   @Post(':id/verify')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SELLER)
+  @Roles(UserRole.USER, UserRole.BUILDER)
   @ApiOperation({ summary: 'Verify or reject a payment (Seller only - for own lands)' })
   @ApiResponse({
     status: 200,

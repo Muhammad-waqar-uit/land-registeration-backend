@@ -13,4 +13,31 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @ApiProperty({
+    description: 'CNIC Number',
+    example: '12345-1234567-1',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  cnic?: string;
+
+  @ApiProperty({
+    description: 'Father Name',
+    example: 'Jane Doe',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  fatherName?: string;
+
+  @ApiProperty({
+    description: 'Phone Number',
+    example: '+923001234567',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
 }

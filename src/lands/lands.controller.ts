@@ -68,7 +68,7 @@ export class LandsController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SELLER)
+  @Roles(UserRole.ADMIN, UserRole.USER, UserRole.BUILDER)
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'document', maxCount: 1 },
@@ -103,7 +103,7 @@ export class LandsController {
     description: 'Land successfully created',
     type: LandResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Seller/Admin only' })
+  @ApiResponse({ status: 403, description: 'Forbidden - User/Builder/Admin only' })
   create(
     @Body() createLandDto: CreateLandDto,
     @UploadedFiles()
@@ -125,7 +125,7 @@ export class LandsController {
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SELLER)
+  @Roles(UserRole.ADMIN, UserRole.USER, UserRole.BUILDER)
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'document', maxCount: 1 },
@@ -191,7 +191,7 @@ export class LandsController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SELLER)
+  @Roles(UserRole.ADMIN, UserRole.USER, UserRole.BUILDER)
   @ApiOperation({ summary: 'Delete land listing (Owner/Admin only)' })
   @ApiResponse({
     status: 200,

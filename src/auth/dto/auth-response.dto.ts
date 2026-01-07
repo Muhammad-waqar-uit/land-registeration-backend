@@ -11,7 +11,7 @@ export class UserResponseDto {
   @ApiProperty({ description: 'User email', example: 'john@example.com' })
   email: string;
 
-  @ApiProperty({ description: 'User role', enum: UserRole, example: UserRole.BUYER })
+  @ApiProperty({ description: 'User role', enum: UserRole, example: UserRole.USER })
   role: UserRole;
 
   @ApiProperty({

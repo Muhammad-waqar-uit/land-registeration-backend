@@ -32,14 +32,14 @@ export class ReservationsController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUYER)
+  @Roles(UserRole.USER)
   @ApiOperation({ summary: 'Create a land reservation' })
   @ApiResponse({
     status: 201,
     description: 'Reservation successfully created',
     type: ReservationResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Buyer only' })
+  @ApiResponse({ status: 403, description: 'Forbidden - User only' })
   @ApiResponse({ status: 404, description: 'Land not found' })
   @ApiResponse({ status: 409, description: 'Land not available or already reserved' })
   create(
@@ -65,7 +65,7 @@ export class ReservationsController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUYER)
+  @Roles(UserRole.USER, UserRole.BUILDER)
   @ApiOperation({ summary: 'Cancel a reservation' })
   @ApiResponse({
     status: 200,

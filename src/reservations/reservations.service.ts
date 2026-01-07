@@ -127,7 +127,7 @@ export class ReservationsService {
     );
   }
 
-  async cancel(id: string, buyerId: string): Promise<void> {
+  async cancel(id: string, userId: string): Promise<void> {
     const reservation = await this.reservationRepository.findOne({
       where: { id },
       relations: ['land'],
@@ -137,8 +137,8 @@ export class ReservationsService {
       throw new NotFoundException('Reservation not found');
     }
 
-    // Check if user owns the reservation
-    if (reservation.buyerId !== buyerId) {
+    // Check if user owns the reservation or owns the land
+    if (reservation.buyerId !== userId && reservation.land?.ownerId !== userId) {
       throw new ForbiddenException(
         'You do not have permission to cancel this reservation',
       );
@@ -166,6 +166,20 @@ export class ReservationsService {
         await this.landRepository.save(reservation.land);
       }
     }
+  }
+
+  async findReservationsForSeller(sellerId: string): Promise<ReservationResponseDto[]> {
+    const reservations = await this.reservationRepository
+      .createQueryBuilder('reservation')
+      .innerJoinAndSelect('reservation.land', 'land')
+      .innerJoinAndSelect('reservation.buyer', 'buyer')
+      .where('land.ownerId = :sellerId', { sellerId })
+      .orderBy('reservation.createdAt', 'DESC')
+      .getMany();
+
+    return reservations.map((reservation) =>
+      ReservationResponseDto.fromEntity(reservation, true),
+    );
   }
 
   async findAll(buyerId?: string): Promise<ReservationResponseDto[]> {
