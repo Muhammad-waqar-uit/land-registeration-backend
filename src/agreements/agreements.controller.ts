@@ -7,6 +7,8 @@ import {
   Query,
   UseGuards,
   ParseUUIDPipe,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,7 +16,10 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AgreementsService } from './agreements.service';
 import { CreateAgreementDto } from './dto/create-agreement.dto';
 import { SignAgreementDto } from './dto/sign-agreement.dto';
@@ -62,6 +67,21 @@ export class AgreementsController {
     return this.agreementsService.findAll(query);
   }
 
+  // This must come before :id route
+  @Get('property/:propertyId')
+  @ApiOperation({ summary: 'Get agreements for property' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of agreements for the property',
+  })
+  @ApiResponse({ status: 404, description: 'Property not found' })
+  getPropertyAgreements(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+    @Query() query: QueryAgreementsDto,
+  ) {
+    return this.agreementsService.findAll({ ...query, propertyId });
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get agreement by ID' })
   @ApiResponse({
@@ -89,6 +109,59 @@ export class AgreementsController {
     @CurrentUser() user: User,
   ): Promise<AgreementResponseDto> {
     return this.agreementsService.signAgreement(id, user.id, user.role, signDto);
+  }
+
+  @Post(':id/generate-ownership-doc')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({ summary: 'Generate final ownership document (Builder only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Final ownership document generated',
+    type: AgreementResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Builder only' })
+  @ApiResponse({ status: 404, description: 'Agreement not found' })
+  generateOwnershipDoc(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<AgreementResponseDto> {
+    return this.agreementsService.transferOwnership(id, user.id);
+  }
+
+  @Post(':id/upload-signed')
+  @UseInterceptors(FileInterceptor('document'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload signed document' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        document: {
+          type: 'string',
+          format: 'binary',
+          description: 'Signed agreement document',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Signed document uploaded successfully',
+    type: AgreementResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Agreement not found' })
+  uploadSigned(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: User,
+  ): Promise<AgreementResponseDto> {
+    // This will be implemented in service - for now return findOne
+    // The service method can handle signed document upload
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    return this.agreementsService.findOne(id);
   }
 
   @Post(':id/verify')

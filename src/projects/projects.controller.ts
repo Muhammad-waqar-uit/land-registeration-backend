@@ -79,13 +79,13 @@ export class ProjectsController {
   }
 
   @Get(':id/properties')
-  @ApiOperation({ summary: 'Get project details with all properties' })
+  @ApiOperation({ summary: 'Get all properties in project' })
   @ApiResponse({
     status: 200,
-    description: 'Project with properties',
-    type: ProjectResponseDto,
+    description: 'List of properties in the project',
   })
-  async findOneWithProperties(
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async getProjectProperties(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ProjectResponseDto> {
     return this.projectsService.findOneWithProperties(id);

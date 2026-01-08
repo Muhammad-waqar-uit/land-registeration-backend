@@ -24,6 +24,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../entities/user.entity';
+import { ResaleRequestStatus } from '../entities/resale-request.entity';
 
 @ApiTags('Resale Requests')
 @Controller('resale-requests')
@@ -151,6 +152,52 @@ export class ResaleRequestsController {
     @CurrentUser() user: User,
   ): Promise<ResaleRequestResponseDto> {
     return this.resaleRequestsService.listPropertyAsResale(id, user.id);
+  }
+
+  @Post(':id/approve')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({ summary: 'Approve resale request (Builder only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Resale request approved',
+    type: ResaleRequestResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Not authorized' })
+  @ApiResponse({ status: 404, description: 'Resale request not found' })
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() respondDto?: RespondResaleRequestDto,
+    @CurrentUser() user: User,
+  ): Promise<ResaleRequestResponseDto> {
+    return this.resaleRequestsService.respondToResaleRequest(
+      id,
+      { status: ResaleRequestStatus.APPROVED, builderResponse: respondDto?.builderResponse },
+      user.id,
+    );
+  }
+
+  @Post(':id/reject')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({ summary: 'Reject resale request (Builder only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Resale request rejected',
+    type: ResaleRequestResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Not authorized' })
+  @ApiResponse({ status: 404, description: 'Resale request not found' })
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() respondDto?: RespondResaleRequestDto,
+    @CurrentUser() user: User,
+  ): Promise<ResaleRequestResponseDto> {
+    return this.resaleRequestsService.respondToResaleRequest(
+      id,
+      { status: ResaleRequestStatus.REJECTED, builderResponse: respondDto?.builderResponse },
+      user.id,
+    );
   }
 
   @Post(':id/mark-sold')

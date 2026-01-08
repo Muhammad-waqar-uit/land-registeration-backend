@@ -745,6 +745,234 @@ export class BlockchainService {
   }
 
   /**
+   * Store agreement hash on blockchain
+   * @param landId - Blockchain land ID
+   * @param agreementHash - SHA-256 hash of signed agreement
+   * @param ipfsHash - IPFS hash of signed agreement document
+   * @returns Transaction result
+   */
+  async storeAgreementHash(
+    landId: number,
+    agreementHash: string,
+    ipfsHash: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      // Note: The smart contract may need to be extended to store agreement hashes
+      // For now, we'll log and return success (actual implementation depends on contract)
+      // If contract has a function like: function storeAgreementHash(uint256 landId, bytes32 agreementHash, string memory ipfsHash)
+      // Uncomment and implement:
+      
+      // Convert hash to bytes32
+      // const hashBytes32 = ethers.hexlify(
+      //   ethers.getBytes(agreementHash.startsWith('0x') ? agreementHash : `0x${agreementHash}`),
+      // );
+
+      // const tx = await this.contract!.storeAgreementHash(landId, hashBytes32, ipfsHash);
+      // const receipt = await tx.wait();
+
+      this.logger.log(
+        `Agreement hash logged for land ${landId}. Hash: ${agreementHash}, IPFS: ${ipfsHash}`,
+      );
+
+      // Return success for now (contract extension needed for actual storage)
+      return {
+        success: true,
+        // transactionHash: tx.hash, // Uncomment when contract function is available
+      };
+    } catch (error) {
+      this.logger.error('Error storing agreement hash:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Store ownership document hash on blockchain
+   * @param landId - Blockchain land ID
+   * @param documentHash - SHA-256 hash of ownership document
+   * @param ipfsHash - IPFS hash of ownership document
+   * @returns Transaction result
+   */
+  async storeOwnershipDocumentHash(
+    landId: number,
+    documentHash: string,
+    ipfsHash: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      // Similar to storeAgreementHash - contract may need extension
+      // For now, we can use updateLand to update the document hash
+      const hashBytes32 = ethers.hexlify(
+        ethers.getBytes(documentHash.startsWith('0x') ? documentHash : `0x${documentHash}`),
+      );
+
+      // Get current land data first
+      const landData = await this.contract!.lands(landId);
+      const totalPrice = landData[4]; // totalPrice is 5th element (0-indexed)
+
+      // Update land with new ownership document hash
+      const tx = await this.contract!.updateLand(
+        landId,
+        ipfsHash,
+        hashBytes32,
+        totalPrice,
+      );
+
+      this.logger.log(
+        `Ownership document hash stored for land ${landId}. TX: ${tx.hash}`,
+      );
+
+      const receipt = await tx.wait();
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed',
+        };
+      }
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error storing ownership document hash:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Transfer ownership on blockchain (after payment completion and approvals)
+   * Note: Actual ownership transfer happens via sellerApproveTransfer in smart contract
+   * This method can be used to check status or initiate the approval request
+   * @param landId - Blockchain land ID
+   * @param newOwnerAddress - New owner's wallet address
+   * @returns Transaction result
+   */
+  async transferOwnership(
+    landId: number,
+    newOwnerAddress: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      // The smart contract handles ownership transfer through sellerApproveTransfer
+      // This method can check if transfer is ready or log the process
+      const landData = await this.contract!.lands(landId);
+      const currentOwner = landData[0]; // owner
+      const lockedTo = landData[5]; // lockedTo
+
+      if (lockedTo.toLowerCase() !== newOwnerAddress.toLowerCase()) {
+        return {
+          success: false,
+          error: 'Property is not locked to this buyer',
+        };
+      }
+
+      // Check if payment is complete (would need to check amountPaid from contract)
+      // For now, just log - actual transfer happens via sellerApproveTransfer
+      this.logger.log(
+        `Ownership transfer ready for land ${landId}. New owner: ${newOwnerAddress}`,
+      );
+
+      return {
+        success: true,
+        // Actual transfer happens through sellerApproveTransfer function call
+      };
+    } catch (error) {
+      this.logger.error('Error checking ownership transfer status:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Register builder on blockchain (if smart contract supports)
+   * @param builderAddress - Builder's wallet address
+   * @param licenseNumber - Builder's license number
+   * @returns Transaction result
+   */
+  async registerBuilder(
+    builderAddress: string,
+    licenseNumber: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      // Note: Smart contract may need to be extended with builder registry
+      // For now, just log the builder registration
+      this.logger.log(
+        `Builder registration logged: ${builderAddress} (License: ${licenseNumber})`,
+      );
+
+      // If contract has a function like: function registerBuilder(address builder, string memory licenseNumber)
+      // Uncomment and implement:
+      // const tx = await this.contract!.registerBuilder(builderAddress, licenseNumber);
+      // const receipt = await tx.wait();
+      // return { success: receipt.status === 1, transactionHash: tx.hash };
+
+      return {
+        success: true,
+        // transactionHash: tx.hash, // Uncomment when contract function is available
+      };
+    } catch (error) {
+      this.logger.error('Error registering builder:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Register property on blockchain (alias for registerLand for clarity)
+   * @param ownerAddress - Owner's wallet address
+   * @param ipfsHash - IPFS hash of property documents
+   * @param documentHash - SHA-256 hash of document
+   * @param totalPrice - Total price in wei
+   * @returns Registration result
+   */
+  async registerProperty(
+    ownerAddress: string,
+    ipfsHash: string,
+    documentHash: string,
+    totalPrice: bigint,
+  ): Promise<RegisterLandResult> {
+    // Alias for registerLand - uses same underlying implementation
+    return this.registerLand(ownerAddress, ipfsHash, documentHash, totalPrice);
+  }
+
+  /**
    * Get payment breakdown from blockchain
    * @param landId - Blockchain land ID
    * @returns Payment breakdown

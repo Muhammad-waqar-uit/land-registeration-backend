@@ -102,6 +102,51 @@ export class PaymentsController {
     return this.paymentsService.findPendingPaymentsForBuilder(user.id);
   }
 
+  @Get('property/:propertyId')
+  @ApiOperation({ summary: 'Get payments for property' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of payments for the property',
+    type: [PaymentResponseDto],
+  })
+  @ApiResponse({ status: 404, description: 'Property not found' })
+  getPropertyPayments(@Param('propertyId', ParseUUIDPipe) propertyId: string) {
+    return this.paymentsService.findPaymentsByProperty(propertyId);
+  }
+
+  @Get('agreement/:agreementId')
+  @ApiOperation({ summary: 'Get payments for agreement' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of payments for the agreement',
+    type: [PaymentResponseDto],
+  })
+  @ApiResponse({ status: 404, description: 'Agreement not found' })
+  getAgreementPayments(@Param('agreementId', ParseUUIDPipe) agreementId: string) {
+    return this.paymentsService.findPaymentsByAgreement(agreementId);
+  }
+
+  @Get('installment-summary/:propertyId')
+  @ApiOperation({ summary: 'Get payment summary (total paid, remaining, timeline)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment summary for the property',
+    schema: {
+      type: 'object',
+      properties: {
+        totalPaid: { type: 'number' },
+        remainingBalance: { type: 'number' },
+        totalAmount: { type: 'number' },
+        payments: { type: 'array' },
+        installments: { type: 'array' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Property not found' })
+  getInstallmentSummary(@Param('propertyId', ParseUUIDPipe) propertyId: string) {
+    return this.paymentsService.getInstallmentSummary(propertyId);
+  }
+
   @Post(':id/verify')
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER, UserRole.ADMIN)

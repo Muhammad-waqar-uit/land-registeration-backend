@@ -5,9 +5,13 @@ import { BuildersService } from './builders.service';
 import { User } from '../entities/user.entity';
 import { Project } from '../entities/project.entity';
 import { Land } from '../entities/land.entity';
+import { PropertyRequestsModule } from '../property-requests/property-requests.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Project, Land])],
+  imports: [
+    TypeOrmModule.forFeature([User, Project, Land]),
+    PropertyRequestsModule,
+  ],
   controllers: [BuildersController],
   providers: [BuildersService],
   exports: [BuildersService],

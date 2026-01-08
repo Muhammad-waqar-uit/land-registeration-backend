@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +13,9 @@ import { Project } from '../entities/project.entity';
 import { Land, LandStatus } from '../entities/land.entity';
 import { BuilderResponseDto } from './dto/builder-response.dto';
 import { VerifyBuilderDto } from './dto/verify-builder.dto';
+import { RegisterBuilderDto } from './dto/register-builder.dto';
+import { PropertyRequestsService } from '../property-requests/property-requests.service';
+import { QueryPropertyRequestsDto } from '../property-requests/dto/query-property-requests.dto';
 
 @Injectable()
 export class BuildersService {
@@ -24,7 +28,73 @@ export class BuildersService {
     private projectRepository: Repository<Project>,
     @InjectRepository(Land)
     private landRepository: Repository<Land>,
+    private propertyRequestsService: PropertyRequestsService,
   ) {}
+
+  /**
+   * Register/Request builder status
+   * Allows a user to request builder status by providing company info
+   * Requires admin verification before they can operate as a builder
+   */
+  async registerBuilder(
+    userId: string,
+    registerDto: RegisterBuilderDto,
+  ): Promise<BuilderResponseDto> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if license number is already taken by another user
+    const existingBuilder = await this.userRepository.findOne({
+      where: { licenseNumber: registerDto.licenseNumber },
+    });
+
+    if (existingBuilder && existingBuilder.id !== userId) {
+      throw new ConflictException('License number is already registered');
+    }
+
+    // If user is already a builder, just update their info
+    if (user.role === UserRole.BUILDER) {
+      // Update builder info
+      if (registerDto.companyName) user.companyName = registerDto.companyName;
+      if (registerDto.licenseNumber) user.licenseNumber = registerDto.licenseNumber;
+      if (registerDto.cnic) user.cnic = registerDto.cnic;
+      if (registerDto.phoneNumber) user.phoneNumber = registerDto.phoneNumber;
+
+      // Reset verification status if license number changed
+      if (
+        registerDto.licenseNumber &&
+        user.licenseNumber !== registerDto.licenseNumber
+      ) {
+        user.isBuilderVerified = false;
+        user.builderVerifiedAt = null;
+        user.verifiedBy = null;
+      }
+
+      const updatedBuilder = await this.userRepository.save(user);
+      this.logger.log(`Builder info updated for user ${userId}`);
+      return BuilderResponseDto.fromEntity(updatedBuilder);
+    }
+
+    // Convert user to builder role
+    user.role = UserRole.BUILDER;
+    user.companyName = registerDto.companyName;
+    user.licenseNumber = registerDto.licenseNumber;
+    if (registerDto.cnic) user.cnic = registerDto.cnic;
+    if (registerDto.phoneNumber) user.phoneNumber = registerDto.phoneNumber;
+    user.isBuilderVerified = false; // Requires admin verification
+    user.builderVerifiedAt = null;
+    user.verifiedBy = null;
+
+    const newBuilder = await this.userRepository.save(user);
+    this.logger.log(`User ${userId} registered as builder (pending verification)`);
+
+    return BuilderResponseDto.fromEntity(newBuilder);
+  }
 
   /**
    * Verify a builder (Admin only)
@@ -237,6 +307,27 @@ export class BuildersService {
       soldProperties,
       totalSales,
     };
+  }
+
+  /**
+   * Get all property requests for builder's properties
+   */
+  async getBuilderPropertyRequests(
+    builderId: string,
+    query?: QueryPropertyRequestsDto,
+  ) {
+    const builder = await this.userRepository.findOne({
+      where: { id: builderId, role: UserRole.BUILDER },
+    });
+
+    if (!builder) {
+      throw new NotFoundException('Builder not found');
+    }
+
+    return this.propertyRequestsService.findBuilderRequests(
+      builderId,
+      query || { page: 1, limit: 10 },
+    );
   }
 }
 

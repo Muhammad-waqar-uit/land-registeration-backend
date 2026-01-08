@@ -459,4 +459,89 @@ export class PaymentsService {
       isFullyPaid,
     };
   }
+
+  /**
+   * Find payments by property ID
+   */
+  async findPaymentsByProperty(propertyId: string): Promise<PaymentResponseDto[]> {
+    const property = await this.landRepository.findOne({
+      where: { id: propertyId },
+    });
+
+    if (!property) {
+      throw new NotFoundException('Property not found');
+    }
+
+    const payments = await this.paymentRepository.find({
+      where: { landId: propertyId },
+      relations: ['land', 'buyer', 'agreement', 'installment'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return payments.map((payment) => PaymentResponseDto.fromEntity(payment, true));
+  }
+
+  /**
+   * Find payments by agreement ID
+   */
+  async findPaymentsByAgreement(agreementId: string): Promise<PaymentResponseDto[]> {
+    const agreement = await this.agreementRepository.findOne({
+      where: { id: agreementId },
+    });
+
+    if (!agreement) {
+      throw new NotFoundException('Agreement not found');
+    }
+
+    const payments = await this.paymentRepository.find({
+      where: { agreementId },
+      relations: ['land', 'buyer', 'agreement', 'installment'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return payments.map((payment) => PaymentResponseDto.fromEntity(payment, true));
+  }
+
+  /**
+   * Get installment summary for a property
+   */
+  async getInstallmentSummary(propertyId: string): Promise<{
+    totalPaid: number;
+    remainingBalance: number;
+    totalAmount: number;
+    payments: PaymentResponseDto[];
+    installments: any[];
+  }> {
+    const property = await this.landRepository.findOne({
+      where: { id: propertyId },
+      relations: ['project'],
+    });
+
+    if (!property) {
+      throw new NotFoundException('Property not found');
+    }
+
+    const balanceInfo = await this.calculateRemainingBalance(propertyId);
+    const payments = await this.findPaymentsByProperty(propertyId);
+    const installments = await this.installmentRepository.find({
+      where: { landId: propertyId },
+      relations: ['agreement'],
+      order: { paymentWindowStart: 'ASC' },
+    });
+
+    return {
+      totalPaid: balanceInfo.totalPaid,
+      remainingBalance: balanceInfo.remainingBalance,
+      totalAmount: property.price,
+      payments,
+      installments: installments.map((inst) => ({
+        id: inst.id,
+        amount: inst.amount,
+        paymentWindowStart: inst.paymentWindowStart,
+        paymentWindowEnd: inst.paymentWindowEnd,
+        paymentDate: inst.paymentDate,
+        status: inst.status,
+      })),
+    };
+  }
 }

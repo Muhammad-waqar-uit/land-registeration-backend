@@ -36,18 +36,18 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../entities/user.entity';
 
-@ApiTags('Lands')
-@Controller('lands')
+@ApiTags('Properties', 'Lands')
+@Controller(['properties', 'lands']) // Support both routes for backward compatibility
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('JWT-auth')
 export class LandsController {
   constructor(private readonly landsService: LandsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all lands with optional filters' })
+  @ApiOperation({ summary: 'List properties (with filters: project, builder, status, etc.)' })
   @ApiResponse({
     status: 200,
-    description: 'List of lands',
+    description: 'List of properties',
     type: [LandResponseDto],
   })
   findAll(@Query() query: QueryLandsDto) {
@@ -55,13 +55,13 @@ export class LandsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get land by ID' })
+  @ApiOperation({ summary: 'Get property details' })
   @ApiResponse({
     status: 200,
-    description: 'Land details',
+    description: 'Property details',
     type: LandResponseDto,
   })
-  @ApiResponse({ status: 404, description: 'Land not found' })
+  @ApiResponse({ status: 404, description: 'Property not found' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.landsService.findOne(id, true);
   }
@@ -76,7 +76,7 @@ export class LandsController {
     ]),
   )
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Create a new property listing (Builder only)' })
+  @ApiOperation({ summary: 'Create property (builder only, within project)' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -133,7 +133,7 @@ export class LandsController {
     ]),
   )
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Update property listing (Builder/Owner or Admin only)' })
+  @ApiOperation({ summary: 'Update property (builder only, before sale)' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -192,7 +192,7 @@ export class LandsController {
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.BUILDER) // Admin or Builder (owner)
-  @ApiOperation({ summary: 'Delete property listing (Builder/Owner or Admin only)' })
+  @ApiOperation({ summary: 'Delete property (builder only, if not sold)' })
   @ApiResponse({
     status: 200,
     description: 'Land successfully deleted',
@@ -215,14 +215,14 @@ export class LandsController {
     };
   }
 
-  @Post(':id/verify')
-  @ApiOperation({ summary: 'Verify document and image integrity using SHA-256 hash' })
+  @Get(':id/verify')
+  @ApiOperation({ summary: 'Verify document integrity' })
   @ApiResponse({
     status: 200,
     description: 'Verification result for both document and image',
     type: VerificationResponseDto,
   })
-  @ApiResponse({ status: 404, description: 'Land not found' })
+  @ApiResponse({ status: 404, description: 'Property not found' })
   async verifyDocument(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<VerificationResponseDto> {

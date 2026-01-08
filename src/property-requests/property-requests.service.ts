@@ -32,7 +32,10 @@ export class PropertyRequestsService {
   ) {}
 
   /**
-   * Create purchase request (buyer action)
+   * Step 5.2 Flow Step 1: Create purchase request (buyer action)
+   * 
+   * Buyer initiates purchase request for an available property.
+   * Property status changes to RESERVED to prevent other buyers from requesting.
    */
   async createPropertyRequest(
     createDto: CreatePropertyRequestDto,
@@ -94,7 +97,14 @@ export class PropertyRequestsService {
   }
 
   /**
-   * Builder approval/rejection of property request
+   * Step 5.2 Flow Steps 2-3: Builder approval/rejection of property request
+   * 
+   * Flow:
+   * 1. Buyer creates request (Step 1 - handled by createPropertyRequest)
+   * 2. Builder reviews request (Step 2 - builder views pending requests)
+   * 3. Builder approves/rejects (Step 3 - this method)
+   * 4. If approved → Property status changes to AGREEMENT_PENDING
+   *    → Builder should create agreement next (separate endpoint)
    */
   async respondToPropertyRequest(
     requestId: string,
@@ -161,10 +171,18 @@ export class PropertyRequestsService {
 
     const savedRequest = await this.propertyRequestRepository.save(request);
 
-    // Update property status based on response
+    // Step 5.2: Update property status based on response
     if (respondDto.status === PropertyRequestStatus.APPROVED) {
-      // Property remains RESERVED, builder should create agreement next
-      // Status will change to AGREEMENT_PENDING when agreement is created
+      // Step 5.2 Flow Step 3: Builder approved request
+      // Next step: Builder should create an initial agreement for this buyer
+      // Property status changes to AGREEMENT_PENDING to indicate ready for agreement creation
+      property.status = LandStatus.AGREEMENT_PENDING;
+      await this.landRepository.save(property);
+      
+      // Step 5.2 Flow Step 4: If approved → Create agreement
+      // Note: Agreement creation is initiated separately by the builder
+      // The builder can now create an agreement using the agreements endpoint
+      // with propertyId and buyerId from this approved request
     } else {
       // If rejected, check if there are other pending requests
       const pendingRequestsCount = await this.propertyRequestRepository.count({
@@ -269,6 +287,82 @@ export class PropertyRequestsService {
     queryBuilder.andWhere('request.status = :status', {
       status: PropertyRequestStatus.PENDING,
     });
+
+    if (propertyId) {
+      // Additional filter if specific property requested
+      if (propertyIds.includes(propertyId)) {
+        queryBuilder.andWhere('request.propertyId = :propertyId', {
+          propertyId,
+        });
+      } else {
+        // If property doesn't belong to builder, return empty
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit,
+        };
+      }
+    }
+
+    const [requests, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('request.createdAt', 'DESC')
+      .getManyAndCount();
+
+    return {
+      data: requests.map((request) =>
+        PropertyRequestResponseDto.fromEntity(request),
+      ),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Get all property requests for builder's properties (all statuses)
+   */
+  async findBuilderRequests(
+    builderId: string,
+    query: QueryPropertyRequestsDto,
+  ): Promise<{
+    data: PropertyRequestResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const { page = 1, limit = 10, propertyId, status } = query;
+
+    // Get all properties owned by builder
+    const builderProperties = await this.landRepository.find({
+      where: { ownerId: builderId },
+      select: ['id'],
+    });
+
+    const propertyIds = builderProperties.map((p) => p.id);
+
+    if (propertyIds.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit,
+      };
+    }
+
+    const queryBuilder =
+      this.propertyRequestRepository.createQueryBuilder('request');
+
+    queryBuilder.where('request.propertyId IN (:...propertyIds)', {
+      propertyIds,
+    });
+
+    // Optional status filter
+    if (status) {
+      queryBuilder.andWhere('request.status = :status', { status });
+    }
 
     if (propertyId) {
       // Additional filter if specific property requested

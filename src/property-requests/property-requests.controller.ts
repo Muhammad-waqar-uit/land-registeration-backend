@@ -25,6 +25,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../entities/user.entity';
+import { PropertyRequestStatus } from '../entities/property-request.entity';
 
 @ApiTags('Property Requests')
 @Controller('property-requests')
@@ -131,6 +132,52 @@ export class PropertyRequestsController {
     return this.propertyRequestsService.respondToPropertyRequest(
       id,
       respondDto,
+      user.id,
+    );
+  }
+
+  @Post(':id/approve')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({ summary: 'Approve property request (Builder only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Property request approved',
+    type: PropertyRequestResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Not authorized' })
+  @ApiResponse({ status: 404, description: 'Property request not found' })
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() respondDto?: RespondPropertyRequestDto,
+    @CurrentUser() user: User,
+  ): Promise<PropertyRequestResponseDto> {
+    return this.propertyRequestsService.respondToPropertyRequest(
+      id,
+      { status: PropertyRequestStatus.APPROVED, builderResponse: respondDto?.builderResponse },
+      user.id,
+    );
+  }
+
+  @Post(':id/reject')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({ summary: 'Reject property request (Builder only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Property request rejected',
+    type: PropertyRequestResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Not authorized' })
+  @ApiResponse({ status: 404, description: 'Property request not found' })
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() respondDto?: RespondPropertyRequestDto,
+    @CurrentUser() user: User,
+  ): Promise<PropertyRequestResponseDto> {
+    return this.propertyRequestsService.respondToPropertyRequest(
+      id,
+      { status: PropertyRequestStatus.REJECTED, builderResponse: respondDto?.builderResponse },
       user.id,
     );
   }

@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { Agreement, AgreementType, AgreementStatus } from '../entities/agreement.entity';
 import { Land, LandStatus } from '../entities/land.entity';
 import { User, UserRole } from '../entities/user.entity';
+import { OwnershipHistory, TransferType } from '../entities/ownership-history.entity';
 import { CreateAgreementDto } from './dto/create-agreement.dto';
 import { SignAgreementDto } from './dto/sign-agreement.dto';
 import { QueryAgreementsDto } from './dto/query-agreements.dto';
@@ -27,6 +28,8 @@ export class AgreementsService {
     private landRepository: Repository<Land>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(OwnershipHistory)
+    private ownershipHistoryRepository: Repository<OwnershipHistory>,
     private fileStorageService: FileStorageService,
     private ipfsService: IpfsService,
     private hashService: HashService,
@@ -67,9 +70,14 @@ export class AgreementsService {
       throw new ForbiddenException('Property does not belong to this builder');
     }
 
-    if (property.status !== LandStatus.AVAILABLE && property.status !== LandStatus.RESERVED) {
+    // Property should be in AGREEMENT_PENDING status (after approved request) or still AVAILABLE/RESERVED
+    if (
+      property.status !== LandStatus.AVAILABLE &&
+      property.status !== LandStatus.RESERVED &&
+      property.status !== LandStatus.AGREEMENT_PENDING
+    ) {
       throw new BadRequestException(
-        `Cannot create agreement for property with status "${property.status}"`,
+        `Cannot create agreement for property with status "${property.status}". Property must be AVAILABLE, RESERVED, or AGREEMENT_PENDING.`,
       );
     }
 
@@ -104,7 +112,8 @@ export class AgreementsService {
       totalAmount: createAgreementDto.terms?.totalAmount || property.price,
       installmentPlanYears:
         createAgreementDto.terms?.installmentPlanYears ||
-        property.installmentPlanYears,
+        property.installmentPlanYears ||
+        undefined,
       paymentTerms: createAgreementDto.terms?.paymentTerms || 'As per installment plan',
       propertyDetails: {
         title: property.title,
@@ -126,7 +135,7 @@ export class AgreementsService {
         licenseNumber: builder.licenseNumber,
       },
       ...createAgreementDto.terms,
-    };
+    } as Agreement['terms'];
 
     // Generate agreement document
     const documentContent = this.generateAgreementDocument(
@@ -134,7 +143,7 @@ export class AgreementsService {
       property,
       buyer,
       builder,
-      terms,
+      terms || {},
     );
 
     // Convert document to buffer
@@ -173,6 +182,10 @@ export class AgreementsService {
       console.error('Failed to upload agreement to IPFS:', error);
     }
 
+    // Step 5.3 Flow Step 1: Builder creates initial agreement
+    // Step 5.3 Flow Step 2: Generate agreement document (PDF/HTML) - Done above
+    // Step 5.3 Flow Step 3: Upload to IPFS - Done above
+    
     // Create agreement entity
     const agreement = this.agreementRepository.create({
       propertyId: createAgreementDto.propertyId,
@@ -449,17 +462,37 @@ This document is digitally stored and verifiable on the blockchain.
       agreement.signedDocumentIPFSHash = signedIPFSHash;
       agreement.signedDocumentHash = signedHash;
 
-      // Store hash on blockchain (if configured)
+      // Step 5.3 Flow Step 6: Store signed document on IPFS (already done above)
+      // Step 5.3 Flow Step 7: Store agreement hash on blockchain
       if (this.blockchainService.isContractAvailable() && agreement.property.blockchainLandId) {
         try {
-          // Note: The smart contract may need to be extended to store agreement hashes
-          // For now, we'll just log it - actual blockchain storage can be implemented later
-          console.log(
-            `Agreement ${agreementId} signed. Hash: ${signedHash}. Property blockchain ID: ${agreement.property.blockchainLandId}`,
+          const blockchainResult = await this.blockchainService.storeAgreementHash(
+            agreement.property.blockchainLandId,
+            signedHash,
+            signedIPFSHash || '',
           );
+
+          if (blockchainResult.success && blockchainResult.transactionHash) {
+            agreement.blockchainTxHash = blockchainResult.transactionHash;
+            console.log(
+              `Agreement ${agreementId} hash stored on blockchain. TX: ${blockchainResult.transactionHash}`,
+            );
+          } else {
+            console.warn(
+              `Failed to store agreement hash on blockchain: ${blockchainResult.error}`,
+            );
+          }
         } catch (error) {
           console.error('Failed to store agreement hash on blockchain:', error);
         }
+      }
+
+      // Step 5.3 Flow Step 8: Mark agreement as signed (already done above - status = SIGNED)
+      // Step 5.3 Flow Step 9: Enable payment phase
+      // Update property status to PAYMENT_IN_PROGRESS to enable payments
+      if (agreement.property.status === LandStatus.AGREEMENT_PENDING) {
+        agreement.property.status = LandStatus.PAYMENT_IN_PROGRESS;
+        await this.landRepository.save(agreement.property);
       }
     } else {
       agreement.status = AgreementStatus.PENDING_SIGNATURE;
@@ -804,6 +837,203 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
       documentVerified,
       agreement: AgreementResponseDto.fromEntity(agreement),
     };
+  }
+
+  /**
+   * Step 5.5: Implement Ownership Transfer Logic
+   * Complete ownership transfer after all payments are completed
+   * 
+   * Flow:
+   * 1. Check if all payments completed (or timeline met)
+   * 2. Builder generates final ownership document
+   * 3. Upload to IPFS
+   * 4. Store hash on blockchain
+   * 5. Transfer ownership on blockchain (smart contract)
+   * 6. Update property ownerId
+   * 7. Create ownership history record
+   * 8. Mark property as OWNED
+   * 9. Mark agreement as completed
+   */
+  async transferOwnership(
+    agreementId: string,
+    builderId: string,
+  ): Promise<AgreementResponseDto> {
+    // Find agreement
+    const agreement = await this.agreementRepository.findOne({
+      where: { id: agreementId },
+      relations: ['property', 'buyer', 'builder'],
+    });
+
+    if (!agreement) {
+      throw new NotFoundException('Agreement not found');
+    }
+
+    // Verify agreement belongs to builder
+    if (agreement.builderId !== builderId) {
+      throw new ForbiddenException(
+        'You can only transfer ownership for your own agreements',
+      );
+    }
+
+    // Verify agreement is signed
+    if (agreement.status !== AgreementStatus.SIGNED) {
+      throw new BadRequestException(
+        'Agreement must be signed before ownership transfer',
+      );
+    }
+
+    const property = agreement.property;
+    const buyer = agreement.buyer;
+    const builder = agreement.builder;
+
+    // Step 5.5 Flow Step 1: Check if all payments completed
+    const totalPaid = property.totalPaid || 0;
+    const remainingBalance = property.remainingBalance ?? property.price;
+
+    if (remainingBalance > 0) {
+      throw new BadRequestException(
+        `Payments not completed. Remaining balance: ${remainingBalance}`,
+      );
+    }
+
+    // Verify property is in payment_in_progress or owned status
+    if (
+      property.status !== LandStatus.PAYMENT_IN_PROGRESS &&
+      property.status !== LandStatus.OWNED
+    ) {
+      throw new BadRequestException(
+        `Cannot transfer ownership. Property status: ${property.status}`,
+      );
+    }
+
+    // Step 5.5 Flow Step 2: Generate final ownership document
+    const finalOwnershipDocument = this.generateAgreementDocument(
+      AgreementType.FINAL_OWNERSHIP,
+      property,
+      buyer,
+      builder,
+      agreement.terms || {},
+    );
+
+    // Convert to buffer
+    const documentBuffer = Buffer.from(finalOwnershipDocument, 'utf-8');
+    const documentHash = this.hashService.calculateSHA256(documentBuffer);
+
+    // Step 5.5 Flow Step 3: Upload to IPFS
+    const uploadResult = await this.fileStorageService.uploadFile('agreements', {
+      buffer: documentBuffer,
+      originalname: `final-ownership-${agreementId}-${Date.now()}.txt`,
+      mimetype: 'text/plain',
+      size: documentBuffer.length,
+    } as Express.Multer.File);
+
+    let ipfsHash: string | null = null;
+    try {
+      const ipfsResult = await this.ipfsService.uploadFile({
+        buffer: documentBuffer,
+        originalname: `final-ownership-${agreementId}-${Date.now()}.txt`,
+        mimetype: 'text/plain',
+        size: documentBuffer.length,
+      } as Express.Multer.File);
+
+      ipfsHash = this.ipfsService.formatIPFSHash(
+        ipfsResult.hash,
+        ipfsResult.gateway,
+        ipfsResult.timestamp,
+      );
+    } catch (error) {
+      console.error('Failed to upload final ownership document to IPFS:', error);
+    }
+
+    // Step 5.5 Flow Step 4: Store hash on blockchain
+    let blockchainTxHash: string | null = null;
+    if (this.blockchainService.isContractAvailable() && property.blockchainLandId) {
+      try {
+        const blockchainResult = await this.blockchainService.storeOwnershipDocumentHash(
+          property.blockchainLandId,
+          documentHash,
+          ipfsHash || '',
+        );
+
+        if (blockchainResult.success && blockchainResult.transactionHash) {
+          blockchainTxHash = blockchainResult.transactionHash;
+        }
+      } catch (error) {
+        console.error('Failed to store ownership document hash on blockchain:', error);
+      }
+    }
+
+    // Step 5.5 Flow Step 5: Transfer ownership on blockchain (if buyer has wallet)
+    if (
+      buyer.walletAddress &&
+      this.blockchainService.isContractAvailable() &&
+      property.blockchainLandId
+    ) {
+      try {
+        const transferResult = await this.blockchainService.transferOwnership(
+          property.blockchainLandId,
+          buyer.walletAddress,
+        );
+
+        if (transferResult.success && transferResult.transactionHash) {
+          blockchainTxHash = transferResult.transactionHash;
+        }
+      } catch (error) {
+        console.error('Failed to transfer ownership on blockchain:', error);
+      }
+    }
+
+    // Step 5.5 Flow Step 6: Update property ownerId
+    const previousOwnerId = property.ownerId;
+    property.ownerId = buyer.id;
+    property.currentOwnerId = buyer.id;
+    if (!property.originalOwnerId) {
+      property.originalOwnerId = builder.id; // Store original builder for resale flow
+    }
+
+    // Step 5.5 Flow Step 8: Mark property as OWNED
+    property.status = LandStatus.OWNED;
+
+    // Create final ownership agreement
+    const finalAgreement = this.agreementRepository.create({
+      propertyId: property.id,
+      buyerId: buyer.id,
+      builderId: builder.id,
+      agreementType: AgreementType.FINAL_OWNERSHIP,
+      status: AgreementStatus.COMPLETED,
+      documentCID: uploadResult.path,
+      documentUrl: uploadResult.url,
+      documentIPFSHash: ipfsHash,
+      documentHash,
+      blockchainTxHash,
+      terms: agreement.terms,
+      buyerSignedAt: new Date(),
+      builderSignedAt: new Date(),
+    });
+
+    await this.agreementRepository.save(finalAgreement);
+
+    // Step 5.5 Flow Step 9: Mark initial agreement as completed
+    agreement.status = AgreementStatus.COMPLETED;
+    await this.agreementRepository.save(agreement);
+
+    // Step 5.5 Flow Step 7: Create ownership history record
+    const ownershipHistory = this.ownershipHistoryRepository.create({
+      propertyId: property.id,
+      fromOwnerId: previousOwnerId, // Previous owner (builder)
+      toOwnerId: buyer.id, // New owner (buyer)
+      transferType: TransferType.INITIAL_SALE,
+      agreementId: finalAgreement.id,
+      blockchainTxHash,
+      transferredAt: new Date(),
+    });
+
+    await Promise.all([
+      this.landRepository.save(property),
+      this.ownershipHistoryRepository.save(ownershipHistory),
+    ]);
+
+    return AgreementResponseDto.fromEntity(finalAgreement);
   }
 }
 

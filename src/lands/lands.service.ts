@@ -116,13 +116,29 @@ export class LandsService {
     return LandResponseDto.fromEntity(land, includeOwner);
   }
 
+  /**
+   * Create a new property (Builder-Centric Model)
+   * 
+   * Business Logic:
+   * - Only verified builders can create properties (enforced by role guard and verification check)
+   * - Properties must belong to a project (projectId is required and validated)
+   * - Builder owns property until sold (ownerId is set to builderId)
+   * - Builder must be verified before listing properties
+   * 
+   * @param createLandDto Property creation data
+   * @param documentFile Optional property document file
+   * @param imageFile Optional property image file
+   * @param builderId ID of the builder creating the property
+   * @returns Created property
+   */
   async create(
     createLandDto: CreateLandDto,
     documentFile: Express.Multer.File | undefined,
     imageFile: Express.Multer.File | undefined,
     builderId: string,
   ): Promise<LandResponseDto> {
-    // Verify builder exists and is verified
+    // Step 5.1: Validate builder role and verification status
+    // Only builders can create properties (role guard enforced at controller level)
     const builder = await this.userRepository.findOne({
       where: { id: builderId, role: UserRole.BUILDER },
     });
@@ -131,11 +147,13 @@ export class LandsService {
       throw new NotFoundException('Builder not found');
     }
 
+    // Builder must be verified to create properties
     if (!builder.isBuilderVerified) {
       throw new ForbiddenException('Builder must be verified to create properties');
     }
 
-    // Verify project exists and belongs to builder
+    // Step 5.1: Validate project ownership
+    // Properties must belong to a project owned by the builder
     const project = await this.projectRepository.findOne({
       where: { id: createLandDto.projectId },
     });
@@ -144,6 +162,7 @@ export class LandsService {
       throw new NotFoundException('Project not found');
     }
 
+    // Verify project belongs to this builder
     if (project.builderId !== builderId) {
       throw new ForbiddenException('Project does not belong to this builder');
     }
@@ -263,10 +282,12 @@ export class LandsService {
       );
     }
 
+    // Step 5.1: Builder owns property until sold
+    // Property ownership is transferred to buyer only after full payment and final agreement
     const land = this.landRepository.create({
       ...createLandDto,
-      ownerId: builderId, // Builder owns the property until sold
-      projectId: createLandDto.projectId,
+      ownerId: builderId, // Builder owns the property until sold (ownership transfer happens after payment completion)
+      projectId: createLandDto.projectId, // Property must belong to a project
       isResale: createLandDto.isResale || false,
       installmentPlanYears: createLandDto.installmentPlanYears || null,
       installmentStartDate,
