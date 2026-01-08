@@ -13,6 +13,12 @@ import { CreateReservationDto } from './dto/create-reservation.dto';
 import { ReservationResponseDto } from './dto/reservation-response.dto';
 import { BlockchainService } from '../common/services/blockchain.service';
 
+/**
+ * @deprecated This service is deprecated. Use PropertyRequestService instead.
+ * Reservations are being replaced by Property Requests in the builder-centric model.
+ * This service is kept for backward compatibility during migration.
+ * TODO: Remove this service after migration is complete.
+ */
 @Injectable()
 export class ReservationsService {
   constructor(
@@ -25,6 +31,10 @@ export class ReservationsService {
     private blockchainService: BlockchainService,
   ) {}
 
+  /**
+   * @deprecated Use PropertyRequestService.createPropertyRequest() instead
+   * Creates a reservation (deprecated - use property requests)
+   */
   async create(
     createReservationDto: CreateReservationDto,
     buyerId: string,

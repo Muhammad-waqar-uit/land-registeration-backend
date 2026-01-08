@@ -6,10 +6,11 @@ import { Land } from '../entities/land.entity';
 import { Reservation } from '../entities/reservation.entity';
 import { Payment } from '../entities/payment.entity';
 import { User } from '../entities/user.entity';
+import { Project } from '../entities/project.entity';
 import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Land, Reservation, Payment, User]), CommonModule],
+  imports: [TypeOrmModule.forFeature([Land, Reservation, Payment, User, Project]), CommonModule],
   controllers: [LandsController],
   providers: [LandsService],
   exports: [LandsService],

@@ -40,4 +40,25 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   phoneNumber?: string;
+
+  // Builder-specific fields
+  @ApiProperty({
+    description: 'Company Name (for builders)',
+    example: 'ABC Construction Ltd.',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  companyName?: string;
+
+  @ApiProperty({
+    description: 'License Number (for builders, must be unique)',
+    example: 'LIC-2024-001',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  licenseNumber?: string;
 }

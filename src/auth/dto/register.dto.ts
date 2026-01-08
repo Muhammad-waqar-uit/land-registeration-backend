@@ -6,6 +6,7 @@ import {
   MaxLength,
   IsNotEmpty,
   IsOptional,
+  ValidateIf,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../../entities/user.entity';
@@ -49,4 +50,56 @@ export class RegisterDto {
   @IsNotEmpty()
   @IsEnum(UserRole)
   role: UserRole;
+
+  @ApiProperty({
+    description: 'CNIC Number',
+    example: '12345-1234567-1',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  cnic?: string;
+
+  @ApiProperty({
+    description: 'Father Name',
+    example: 'Jane Doe',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  fatherName?: string;
+
+  @ApiProperty({
+    description: 'Phone Number',
+    example: '+923001234567',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
+  // Builder-specific fields (required when role is BUILDER)
+  @ApiProperty({
+    description: 'Company Name (required for builders)',
+    example: 'ABC Construction Ltd.',
+    required: false,
+  })
+  @IsOptional()
+  @ValidateIf((o) => o.role === UserRole.BUILDER)
+  @IsNotEmpty({ message: 'Company name is required for builders' })
+  @IsString()
+  @MaxLength(255)
+  companyName?: string;
+
+  @ApiProperty({
+    description: 'License Number (required for builders, must be unique)',
+    example: 'LIC-2024-001',
+    required: false,
+  })
+  @IsOptional()
+  @ValidateIf((o) => o.role === UserRole.BUILDER)
+  @IsNotEmpty({ message: 'License number is required for builders' })
+  @IsString()
+  @MaxLength(100)
+  licenseNumber?: string;
 }

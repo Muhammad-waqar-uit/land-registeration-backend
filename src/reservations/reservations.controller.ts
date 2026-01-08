@@ -23,7 +23,12 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../entities/user.entity';
 
-@ApiTags('Reservations')
+/**
+ * @deprecated This controller is deprecated. Use PropertyRequestsController instead.
+ * Reservations are being replaced by Property Requests in the builder-centric model.
+ * This controller is kept for backward compatibility during migration.
+ */
+@ApiTags('Reservations', 'Deprecated')
 @Controller('reservations')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('JWT-auth')
@@ -33,7 +38,10 @@ export class ReservationsController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserRole.USER)
-  @ApiOperation({ summary: 'Create a land reservation' })
+  @ApiOperation({
+    summary: '[DEPRECATED] Create a land reservation - Use Property Requests instead',
+    deprecated: true,
+  })
   @ApiResponse({
     status: 201,
     description: 'Reservation successfully created',
@@ -50,7 +58,10 @@ export class ReservationsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all reservations (buyers see only their own, admins see all)' })
+  @ApiOperation({
+    summary: '[DEPRECATED] Get all reservations - Use Property Requests instead',
+    deprecated: true,
+  })
   @ApiResponse({
     status: 200,
     description: 'List of reservations',
@@ -66,7 +77,10 @@ export class ReservationsController {
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.USER, UserRole.BUILDER)
-  @ApiOperation({ summary: 'Cancel a reservation' })
+  @ApiOperation({
+    summary: '[DEPRECATED] Cancel a reservation - Use Property Requests instead',
+    deprecated: true,
+  })
   @ApiResponse({
     status: 200,
     description: 'Reservation successfully cancelled',

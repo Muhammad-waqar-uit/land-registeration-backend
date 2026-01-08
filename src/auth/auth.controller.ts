@@ -7,6 +7,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,10 +27,13 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { User } from '../entities/user.entity';
+import { User, UserRole } from '../entities/user.entity';
 import { UserResponseDto, AuthResponseDto } from './dto/auth-response.dto';
+import { Param, ParseUUIDPipe } from '@nestjs/common';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -226,5 +231,25 @@ export class AuthController {
     return {
       message: 'Logged out successfully',
     };
+  }
+
+  @Post('builders/:id/verify')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Verify a builder (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Builder successfully verified',
+    type: UserResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Builder not found' })
+  @ApiResponse({ status: 400, description: 'Builder already verified or not a builder' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  async verifyBuilder(
+    @Param('id', ParseUUIDPipe) builderId: string,
+    @CurrentUser() admin: User,
+  ): Promise<UserResponseDto> {
+    return this.authService.verifyBuilder(builderId, admin.id);
   }
 }

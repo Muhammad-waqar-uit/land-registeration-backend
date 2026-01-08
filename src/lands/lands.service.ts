@@ -9,7 +9,8 @@ import { Repository, FindOptionsWhere } from 'typeorm';
 import { Land, LandStatus } from '../entities/land.entity';
 import { Reservation, ReservationStatus } from '../entities/reservation.entity';
 import { Payment, PaymentStatus } from '../entities/payment.entity';
-import { User } from '../entities/user.entity';
+import { User, UserRole } from '../entities/user.entity';
+import { Project } from '../entities/project.entity';
 import { CreateLandDto } from './dto/create-land.dto';
 import { UpdateLandDto } from './dto/update-land.dto';
 import { QueryLandsDto } from './dto/query-lands.dto';
@@ -31,6 +32,8 @@ export class LandsService {
     private paymentRepository: Repository<Payment>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Project)
+    private projectRepository: Repository<Project>,
     private fileStorageService: FileStorageService,
     private ipfsService: IpfsService,
     private hashService: HashService,
@@ -43,17 +46,39 @@ export class LandsService {
     page: number;
     limit: number;
   }> {
-    const { page = 1, limit = 10, status, ownerId, minPrice, maxPrice } =
-      query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      projectId,
+      builderId,
+      ownerId,
+      minPrice,
+      maxPrice,
+      isResale,
+    } = query;
 
     const queryBuilder = this.landRepository.createQueryBuilder('land');
 
+    // Apply filters
     if (status) {
       queryBuilder.where('land.status = :status', { status });
     }
 
+    if (projectId) {
+      queryBuilder.andWhere('land.projectId = :projectId', { projectId });
+    }
+
+    if (builderId) {
+      queryBuilder.andWhere('land.ownerId = :builderId', { builderId });
+    }
+
     if (ownerId) {
       queryBuilder.andWhere('land.ownerId = :ownerId', { ownerId });
+    }
+
+    if (isResale !== undefined) {
+      queryBuilder.andWhere('land.isResale = :isResale', { isResale });
     }
 
     if (minPrice !== undefined) {
@@ -95,8 +120,34 @@ export class LandsService {
     createLandDto: CreateLandDto,
     documentFile: Express.Multer.File | undefined,
     imageFile: Express.Multer.File | undefined,
-    ownerId: string,
+    builderId: string,
   ): Promise<LandResponseDto> {
+    // Verify builder exists and is verified
+    const builder = await this.userRepository.findOne({
+      where: { id: builderId, role: UserRole.BUILDER },
+    });
+
+    if (!builder) {
+      throw new NotFoundException('Builder not found');
+    }
+
+    if (!builder.isBuilderVerified) {
+      throw new ForbiddenException('Builder must be verified to create properties');
+    }
+
+    // Verify project exists and belongs to builder
+    const project = await this.projectRepository.findOne({
+      where: { id: createLandDto.projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    if (project.builderId !== builderId) {
+      throw new ForbiddenException('Project does not belong to this builder');
+    }
+
     let documentCID: string | undefined;
     let documentUrl: string | undefined;
     let documentIPFSHash: string | undefined;
@@ -158,19 +209,10 @@ export class LandsService {
       }
     }
 
-    // Get owner user to get wallet address
-    const owner = await this.userRepository.findOne({
-      where: { id: ownerId },
-      select: ['id', 'walletAddress'],
-    });
-
-    if (!owner) {
-      throw new NotFoundException('Owner not found');
-    }
-
-    if (!owner.walletAddress) {
+    // Builder must have wallet address
+    if (!builder.walletAddress) {
       throw new BadRequestException(
-        'Owner must have a wallet address to register land on blockchain',
+        'Builder must have a wallet address to register property on blockchain',
       );
     }
 
@@ -188,7 +230,7 @@ export class LandsService {
     if (this.blockchainService.isContractAvailable() && documentHash) {
       try {
         const blockchainResult = await this.blockchainService.registerLand(
-          owner.walletAddress,
+          builder.walletAddress,
           ipfsHash,
           documentHash,
           priceInWei,
@@ -210,9 +252,27 @@ export class LandsService {
       }
     }
 
+    // Calculate installment dates if installment plan is provided
+    let installmentStartDate: Date | null = null;
+    let installmentEndDate: Date | null = null;
+    if (createLandDto.installmentPlanYears) {
+      installmentStartDate = new Date();
+      installmentEndDate = new Date();
+      installmentEndDate.setFullYear(
+        installmentEndDate.getFullYear() + createLandDto.installmentPlanYears,
+      );
+    }
+
     const land = this.landRepository.create({
       ...createLandDto,
-      ownerId,
+      ownerId: builderId, // Builder owns the property until sold
+      projectId: createLandDto.projectId,
+      isResale: createLandDto.isResale || false,
+      installmentPlanYears: createLandDto.installmentPlanYears || null,
+      installmentStartDate,
+      installmentEndDate,
+      totalPaid: 0,
+      remainingBalance: createLandDto.price,
       documentCID,
       documentUrl,
       documentIPFSHash,
@@ -245,33 +305,26 @@ export class LandsService {
       throw new NotFoundException('Land not found');
     }
 
-    // Check permission
-    if (land.ownerId !== userId && userRole !== 'admin') {
+    // Check permission (builder/owner or admin)
+    if (land.ownerId !== userId && userRole !== UserRole.ADMIN) {
       throw new ForbiddenException(
-        'You do not have permission to update this land',
+        'You do not have permission to update this property',
       );
     }
 
-    // Check if land can be updated (not locked or sold, no active reservations, no pending payments)
-    if (userRole !== 'admin') {
-      // Check land status
-      if (land.status === LandStatus.LOCKED || land.status === LandStatus.SOLD) {
+    // Check if land can be updated (not reserved, agreement_pending, payment_in_progress, owned, or resale_listed)
+    if (userRole !== UserRole.ADMIN) {
+      // Check land status - can't update if property has been sold or has active transactions
+      if (
+        land.status === LandStatus.RESERVED ||
+        land.status === LandStatus.AGREEMENT_PENDING ||
+        land.status === LandStatus.PAYMENT_IN_PROGRESS ||
+        land.status === LandStatus.OWNED ||
+        land.status === LandStatus.RESALE_LISTED ||
+        land.status === LandStatus.SOLD
+      ) {
         throw new BadRequestException(
-          `Cannot update land with status "${land.status}". Land must be available.`,
-        );
-      }
-
-      // Check for active reservations
-      const activeReservations = await this.reservationRepository.count({
-        where: {
-          landId: id,
-          status: ReservationStatus.ACTIVE,
-        },
-      });
-
-      if (activeReservations > 0) {
-        throw new BadRequestException(
-          'Cannot update land with active reservations. Please cancel reservations first.',
+          `Cannot update property with status "${land.status}". Property must be available.`,
         );
       }
 
@@ -438,19 +491,19 @@ export class LandsService {
       throw new NotFoundException('Land not found');
     }
 
-    // Check permission
-    if (land.ownerId !== userId && userRole !== 'admin') {
+    // Check permission (builder/owner or admin)
+    if (land.ownerId !== userId && userRole !== UserRole.ADMIN) {
       throw new ForbiddenException(
-        'You do not have permission to delete this land',
+        'You do not have permission to delete this property',
       );
     }
 
-    // Check if land can be deleted (must be available, no reservations, no payments)
-    if (userRole !== 'admin') {
-      // Check land status
+    // Check if land can be deleted (must be available, no transactions)
+    if (userRole !== UserRole.ADMIN) {
+      // Check land status - can only delete if available
       if (land.status !== LandStatus.AVAILABLE) {
         throw new BadRequestException(
-          `Cannot delete land with status "${land.status}". Land must be available.`,
+          `Cannot delete property with status "${land.status}". Property must be available.`,
         );
       }
 
@@ -733,5 +786,287 @@ export class LandsService {
         blockchainLandId: land.blockchainLandId,
       };
     }
+  }
+
+  /**
+   * Get properties available for purchase requests (available properties from builders)
+   * These are properties that buyers can submit purchase requests for
+   */
+  async findAvailableForRequest(query: QueryLandsDto): Promise<{
+    data: LandResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const {
+      page = 1,
+      limit = 10,
+      projectId,
+      builderId,
+      minPrice,
+      maxPrice,
+    } = query;
+
+    const queryBuilder = this.landRepository.createQueryBuilder('land');
+
+    // Only available properties from builders
+    queryBuilder
+      .where('land.status = :status', { status: LandStatus.AVAILABLE })
+      .andWhere('land.isResale = :isResale', { isResale: false });
+
+    // Join with User to filter by builder role
+    queryBuilder
+      .innerJoin('land.owner', 'owner')
+      .andWhere('owner.role = :role', { role: UserRole.BUILDER })
+      .andWhere('owner.isBuilderVerified = :verified', { verified: true });
+
+    if (projectId) {
+      queryBuilder.andWhere('land.projectId = :projectId', { projectId });
+    }
+
+    if (builderId) {
+      queryBuilder.andWhere('land.ownerId = :builderId', { builderId });
+    }
+
+    if (minPrice !== undefined) {
+      queryBuilder.andWhere('land.price >= :minPrice', { minPrice });
+    }
+
+    if (maxPrice !== undefined) {
+      queryBuilder.andWhere('land.price <= :maxPrice', { maxPrice });
+    }
+
+    const [lands, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('land.createdAt', 'DESC')
+      .getManyAndCount();
+
+    return {
+      data: lands.map((land) => LandResponseDto.fromEntity(land)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Get resale properties (properties listed for resale)
+   */
+  async findResaleProperties(query: QueryLandsDto): Promise<{
+    data: LandResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const {
+      page = 1,
+      limit = 10,
+      projectId,
+      builderId,
+      minPrice,
+      maxPrice,
+    } = query;
+
+    const queryBuilder = this.landRepository.createQueryBuilder('land');
+
+    // Resale properties (either marked as resale or have RESALE_LISTED status)
+    queryBuilder.where(
+      '(land.isResale = :isResale OR land.status = :resaleStatus)',
+      { isResale: true, resaleStatus: LandStatus.RESALE_LISTED },
+    );
+
+    if (projectId) {
+      queryBuilder.andWhere('land.projectId = :projectId', { projectId });
+    }
+
+    if (builderId) {
+      queryBuilder.andWhere('land.ownerId = :builderId', { builderId });
+    }
+
+    if (minPrice !== undefined) {
+      queryBuilder.andWhere('land.price >= :minPrice', { minPrice });
+    }
+
+    if (maxPrice !== undefined) {
+      queryBuilder.andWhere('land.price <= :maxPrice', { maxPrice });
+    }
+
+    const [lands, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('land.createdAt', 'DESC')
+      .getManyAndCount();
+
+    return {
+      data: lands.map((land) => LandResponseDto.fromEntity(land)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Check if a property is eligible for purchase requests
+   * Property must be available and belong to a verified builder
+   */
+  async isEligibleForRequest(propertyId: string): Promise<{
+    eligible: boolean;
+    message: string;
+    property?: Land;
+  }> {
+    const property = await this.landRepository.findOne({
+      where: { id: propertyId },
+      relations: ['owner'],
+    });
+
+    if (!property) {
+      return {
+        eligible: false,
+        message: 'Property not found',
+      };
+    }
+
+    if (property.status !== LandStatus.AVAILABLE) {
+      return {
+        eligible: false,
+        message: `Property is not available (status: ${property.status})`,
+        property,
+      };
+    }
+
+    if (property.isResale) {
+      return {
+        eligible: false,
+        message: 'This is a resale property. Use resale request process instead.',
+        property,
+      };
+    }
+
+    const owner = await this.userRepository.findOne({
+      where: { id: property.ownerId },
+    });
+
+    if (!owner || owner.role !== UserRole.BUILDER || !owner.isBuilderVerified) {
+      return {
+        eligible: false,
+        message: 'Property must belong to a verified builder to receive purchase requests',
+        property,
+      };
+    }
+
+    return {
+      eligible: true,
+      message: 'Property is eligible for purchase requests',
+      property,
+    };
+  }
+
+  /**
+   * Check if a property is eligible for resale listing
+   * Property must be owned (not by builder) and current owner must be requesting
+   */
+  async isEligibleForResale(
+    propertyId: string,
+    currentOwnerId: string,
+  ): Promise<{
+    eligible: boolean;
+    message: string;
+    property?: Land;
+  }> {
+    const property = await this.landRepository.findOne({
+      where: { id: propertyId },
+      relations: ['owner', 'originalOwner'],
+    });
+
+    if (!property) {
+      return {
+        eligible: false,
+        message: 'Property not found',
+      };
+    }
+
+    if (property.status !== LandStatus.OWNED) {
+      return {
+        eligible: false,
+        message: `Property must be owned to be listed for resale (current status: ${property.status})`,
+        property,
+      };
+    }
+
+    if (property.currentOwnerId !== currentOwnerId) {
+      return {
+        eligible: false,
+        message: 'Only the current owner can request to resell this property',
+        property,
+      };
+    }
+
+    // Check if property is already listed for resale
+    if (property.status === LandStatus.RESALE_LISTED) {
+      return {
+        eligible: false,
+        message: 'Property is already listed for resale',
+        property,
+      };
+    }
+
+    return {
+      eligible: true,
+      message: 'Property is eligible for resale listing',
+      property,
+    };
+  }
+
+  /**
+   * Get properties by builder (properties created/owned by a specific builder)
+   */
+  async findByBuilder(
+    builderId: string,
+    query: QueryLandsDto,
+  ): Promise<{
+    data: LandResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const { page = 1, limit = 10, status, projectId, isResale, minPrice, maxPrice } = query;
+
+    const queryBuilder = this.landRepository.createQueryBuilder('land');
+
+    queryBuilder.where('land.ownerId = :builderId', { builderId });
+
+    if (status) {
+      queryBuilder.andWhere('land.status = :status', { status });
+    }
+
+    if (projectId) {
+      queryBuilder.andWhere('land.projectId = :projectId', { projectId });
+    }
+
+    if (isResale !== undefined) {
+      queryBuilder.andWhere('land.isResale = :isResale', { isResale });
+    }
+
+    if (minPrice !== undefined) {
+      queryBuilder.andWhere('land.price >= :minPrice', { minPrice });
+    }
+
+    if (maxPrice !== undefined) {
+      queryBuilder.andWhere('land.price <= :maxPrice', { maxPrice });
+    }
+
+    const [lands, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('land.createdAt', 'DESC')
+      .getManyAndCount();
+
+    return {
+      data: lands.map((land) => LandResponseDto.fromEntity(land)),
+      total,
+      page,
+      limit,
+    };
   }
 }

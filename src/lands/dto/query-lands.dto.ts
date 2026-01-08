@@ -1,17 +1,35 @@
-import { IsOptional, IsEnum, IsUUID, IsNumber, Min } from 'class-validator';
+import { IsOptional, IsEnum, IsUUID, IsNumber, Min, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { LandStatus } from '../../entities/land.entity';
 
 export class QueryLandsDto {
   @ApiProperty({
-    description: 'Filter by land status',
+    description: 'Filter by land/property status',
     enum: LandStatus,
     required: false,
   })
   @IsOptional()
   @IsEnum(LandStatus)
   status?: LandStatus;
+
+  @ApiProperty({
+    description: 'Filter by project ID',
+    example: 'uuid',
+    required: false,
+  })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string;
+
+  @ApiProperty({
+    description: 'Filter by builder ID (owner who is builder)',
+    example: 'uuid',
+    required: false,
+  })
+  @IsOptional()
+  @IsUUID()
+  builderId?: string;
 
   @ApiProperty({
     description: 'Filter by owner ID',
@@ -21,6 +39,16 @@ export class QueryLandsDto {
   @IsOptional()
   @IsUUID()
   ownerId?: string;
+
+  @ApiProperty({
+    description: 'Filter by resale properties only',
+    example: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  isResale?: boolean;
 
   @ApiProperty({
     description: 'Minimum price filter',

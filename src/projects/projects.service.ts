@@ -1,0 +1,272 @@
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, ILike } from 'typeorm';
+import { Project, ProjectStatus } from '../entities/project.entity';
+import { User, UserRole } from '../entities/user.entity';
+import { Land } from '../entities/land.entity';
+import { CreateProjectDto } from './dto/create-project.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
+import { QueryProjectsDto } from './dto/query-projects.dto';
+import { ProjectResponseDto } from './dto/project-response.dto';
+import { FileStorageService } from '../common/services/file-storage.service';
+import { IpfsService } from '../common/services/ipfs.service';
+import { HashService } from '../common/services/hash.service';
+
+@Injectable()
+export class ProjectsService {
+  private readonly logger = new Logger(ProjectsService.name);
+
+  constructor(
+    @InjectRepository(Project)
+    private projectRepository: Repository<Project>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    @InjectRepository(Land)
+    private landRepository: Repository<Land>,
+    private fileStorageService: FileStorageService,
+    private ipfsService: IpfsService,
+    private hashService: HashService,
+  ) {}
+
+  /**
+   * Create a new project (Builder only)
+   */
+  async create(
+    createProjectDto: CreateProjectDto,
+    builderId: string,
+  ): Promise<ProjectResponseDto> {
+    // Verify builder exists and is verified
+    const builder = await this.userRepository.findOne({
+      where: { id: builderId, role: UserRole.BUILDER },
+    });
+
+    if (!builder) {
+      throw new NotFoundException('Builder not found');
+    }
+
+    if (!builder.isBuilderVerified) {
+      throw new ForbiddenException('Builder must be verified to create projects');
+    }
+
+    const project = this.projectRepository.create({
+      ...createProjectDto,
+      builderId,
+      totalUnits: createProjectDto.totalUnits || 0,
+    });
+
+    const savedProject = await this.projectRepository.save(project);
+    this.logger.log(`Project ${savedProject.id} created by builder ${builderId}`);
+
+    return ProjectResponseDto.fromEntity(savedProject);
+  }
+
+  /**
+   * Get all projects with filters
+   */
+  async findAll(query: QueryProjectsDto): Promise<{
+    data: ProjectResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const { page = 1, limit = 10, status, builderId, search } = query;
+
+    const queryBuilder = this.projectRepository.createQueryBuilder('project');
+
+    if (status) {
+      queryBuilder.where('project.status = :status', { status });
+    }
+
+    if (builderId) {
+      queryBuilder.andWhere('project.builderId = :builderId', { builderId });
+    }
+
+    if (search) {
+      queryBuilder.andWhere(
+        '(project.name ILIKE :search OR project.location ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const [projects, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('project.createdAt', 'DESC')
+      .getManyAndCount();
+
+    return {
+      data: projects.map((project) => ProjectResponseDto.fromEntity(project)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Get project by ID
+   */
+  async findOne(id: string, includeRelations = false): Promise<ProjectResponseDto> {
+    const project = await this.projectRepository.findOne({
+      where: { id },
+      relations: includeRelations ? ['builder', 'lands'] : [],
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    return ProjectResponseDto.fromEntity(project, includeRelations);
+  }
+
+  /**
+   * Get project with all properties
+   */
+  async findOneWithProperties(id: string): Promise<ProjectResponseDto> {
+    return this.findOne(id, true);
+  }
+
+  /**
+   * Update project (Builder/Owner or Admin)
+   */
+  async update(
+    id: string,
+    updateProjectDto: UpdateProjectDto,
+    userId: string,
+    userRole: string,
+  ): Promise<ProjectResponseDto> {
+    const project = await this.projectRepository.findOne({
+      where: { id },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    // Check permission
+    if (project.builderId !== userId && userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('You do not have permission to update this project');
+    }
+
+    // Check if project can be updated (not completed or cancelled)
+    if (userRole !== UserRole.ADMIN) {
+      if (
+        project.status === ProjectStatus.COMPLETED ||
+        project.status === ProjectStatus.CANCELLED
+      ) {
+        throw new BadRequestException(
+          `Cannot update project with status "${project.status}"`,
+        );
+      }
+    }
+
+    Object.assign(project, updateProjectDto);
+    const updatedProject = await this.projectRepository.save(project);
+
+    return ProjectResponseDto.fromEntity(updatedProject);
+  }
+
+  /**
+   * Delete project (Builder/Owner or Admin)
+   */
+  async remove(id: string, userId: string, userRole: string): Promise<void> {
+    const project = await this.projectRepository.findOne({
+      where: { id },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    // Check permission
+    if (project.builderId !== userId && userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('You do not have permission to delete this project');
+    }
+
+    // Check if project has properties
+    if (userRole !== UserRole.ADMIN) {
+      const propertiesCount = await this.landRepository.count({
+        where: { projectId: id },
+      });
+
+      if (propertiesCount > 0) {
+        throw new BadRequestException(
+          'Cannot delete project with existing properties. Delete properties first.',
+        );
+      }
+    }
+
+    await this.projectRepository.remove(project);
+    this.logger.log(`Project ${id} deleted by user ${userId}`);
+  }
+
+  /**
+   * Upload project approval documents
+   */
+  async uploadApprovalDocuments(
+    id: string,
+    file: Express.Multer.File,
+    userId: string,
+    userRole: string,
+  ): Promise<ProjectResponseDto> {
+    const project = await this.projectRepository.findOne({
+      where: { id },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    // Check permission
+    if (project.builderId !== userId && userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'You do not have permission to upload documents for this project',
+      );
+    }
+
+    // Delete old file if exists
+    if (project.approvalDocumentsCID) {
+      try {
+        const fileName = project.approvalDocumentsCID.split('/').pop();
+        if (fileName) {
+          await this.fileStorageService.deleteFile('project-approvals', fileName);
+        }
+      } catch (error) {
+        this.logger.error('Error deleting old approval document:', error);
+      }
+    }
+
+    // Upload to local storage
+    const uploadResult = await this.fileStorageService.uploadFile(
+      'project-approvals',
+      file,
+    );
+    project.approvalDocumentsCID = uploadResult.path;
+    // Note: approvalDocumentsUrl would be stored if we add that field
+
+    // Calculate SHA-256 hash for tamper detection
+    project.approvalDocumentsHash = this.hashService.calculateSHA256(file.buffer);
+
+    // Upload to IPFS
+    try {
+      const ipfsResult = await this.ipfsService.uploadFile(file);
+      project.approvalDocumentsIPFSHash = this.ipfsService.formatIPFSHash(
+        ipfsResult.hash,
+        ipfsResult.gateway,
+        ipfsResult.timestamp,
+      );
+    } catch (error) {
+      this.logger.error('Failed to upload approval documents to IPFS:', error);
+      // Continue without IPFS hash if upload fails
+    }
+
+    const updatedProject = await this.projectRepository.save(project);
+    return ProjectResponseDto.fromEntity(updatedProject);
+  }
+}
+

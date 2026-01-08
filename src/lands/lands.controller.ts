@@ -68,7 +68,7 @@ export class LandsController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.USER, UserRole.BUILDER)
+  @Roles(UserRole.BUILDER) // Only builders can create properties
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'document', maxCount: 1 },
@@ -76,7 +76,7 @@ export class LandsController {
     ]),
   )
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Create a new land listing' })
+  @ApiOperation({ summary: 'Create a new property listing (Builder only)' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -103,7 +103,7 @@ export class LandsController {
     description: 'Land successfully created',
     type: LandResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - User/Builder/Admin only' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Builder only, must be verified' })
   create(
     @Body() createLandDto: CreateLandDto,
     @UploadedFiles()
@@ -125,7 +125,7 @@ export class LandsController {
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.USER, UserRole.BUILDER)
+  @Roles(UserRole.ADMIN, UserRole.BUILDER) // Admin or Builder (owner)
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'document', maxCount: 1 },
@@ -133,7 +133,7 @@ export class LandsController {
     ]),
   )
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Update land listing (Owner/Admin only)' })
+  @ApiOperation({ summary: 'Update property listing (Builder/Owner or Admin only)' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -191,8 +191,8 @@ export class LandsController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.USER, UserRole.BUILDER)
-  @ApiOperation({ summary: 'Delete land listing (Owner/Admin only)' })
+  @Roles(UserRole.ADMIN, UserRole.BUILDER) // Admin or Builder (owner)
+  @ApiOperation({ summary: 'Delete property listing (Builder/Owner or Admin only)' })
   @ApiResponse({
     status: 200,
     description: 'Land successfully deleted',

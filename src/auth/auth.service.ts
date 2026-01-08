@@ -12,7 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { User } from '../entities/user.entity';
+import { User, UserRole } from '../entities/user.entity';
 import { PasswordResetToken } from '../entities/password-reset-token.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { RegisterDto } from './dto/register.dto';
@@ -41,7 +41,7 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    const { email, password, ...userData } = registerDto;
+    const { email, password, companyName, licenseNumber, ...userData } = registerDto;
 
     // Check if user already exists
     const existingUser = await this.userRepository.findOne({
@@ -52,6 +52,24 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
+    // If builder role, validate builder-specific fields
+    if (registerDto.role === UserRole.BUILDER) {
+      if (!companyName || !licenseNumber) {
+        throw new BadRequestException(
+          'Company name and license number are required for builder registration',
+        );
+      }
+
+      // Check if license number already exists
+      const existingLicense = await this.userRepository.findOne({
+        where: { licenseNumber },
+      });
+
+      if (existingLicense) {
+        throw new ConflictException('License number is already registered');
+      }
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -60,6 +78,11 @@ export class AuthService {
       ...userData,
       email,
       password: hashedPassword,
+      // Builder-specific fields
+      companyName: registerDto.role === UserRole.BUILDER ? companyName : null,
+      licenseNumber: registerDto.role === UserRole.BUILDER ? licenseNumber : null,
+      // Builder is not verified by default
+      isBuilderVerified: false,
     });
 
     const savedUser = await this.userRepository.save(user);
@@ -184,7 +207,6 @@ export class AuthService {
   async getCurrentUser(userId: string): Promise<UserResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      select: ['id', 'name', 'email', 'role', 'walletAddress', 'createdAt', 'updatedAt'],
     });
 
     if (!user) {
@@ -246,11 +268,18 @@ export class AuthService {
 
   async updateProfile(
     userId: string,
-    updateProfileDto: { name?: string; email?: string },
+    updateProfileDto: {
+      name?: string;
+      email?: string;
+      cnic?: string;
+      fatherName?: string;
+      phoneNumber?: string;
+      companyName?: string;
+      licenseNumber?: string;
+    },
   ): Promise<UserResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      select: ['id', 'name', 'email', 'role', 'walletAddress', 'createdAt', 'updatedAt'],
     });
 
     if (!user) {
@@ -268,9 +297,39 @@ export class AuthService {
       }
     }
 
+    // Check if license number is being updated (for builders) and if it's already taken
+    if (
+      updateProfileDto.licenseNumber &&
+      updateProfileDto.licenseNumber !== user.licenseNumber
+    ) {
+      // Only check if user is a builder
+      if (user.role === UserRole.BUILDER) {
+        const existingLicense = await this.userRepository.findOne({
+          where: { licenseNumber: updateProfileDto.licenseNumber },
+        });
+
+        if (existingLicense && existingLicense.id !== userId) {
+          throw new ConflictException('License number is already registered');
+        }
+      }
+    }
+
     // Update user fields
     if (updateProfileDto.name !== undefined) user.name = updateProfileDto.name;
     if (updateProfileDto.email !== undefined) user.email = updateProfileDto.email;
+    if (updateProfileDto.cnic !== undefined) user.cnic = updateProfileDto.cnic;
+    if (updateProfileDto.fatherName !== undefined)
+      user.fatherName = updateProfileDto.fatherName;
+    if (updateProfileDto.phoneNumber !== undefined)
+      user.phoneNumber = updateProfileDto.phoneNumber;
+
+    // Update builder-specific fields (only for builders)
+    if (user.role === UserRole.BUILDER) {
+      if (updateProfileDto.companyName !== undefined)
+        user.companyName = updateProfileDto.companyName;
+      if (updateProfileDto.licenseNumber !== undefined)
+        user.licenseNumber = updateProfileDto.licenseNumber;
+    }
 
     const updatedUser = await this.userRepository.save(user);
 
@@ -562,5 +621,40 @@ export class AuthService {
 
     // Return raw token (only time it's visible)
     return rawToken;
+  }
+
+  /**
+   * Verify a builder (Admin only)
+   * This delegates to BuildersService but is also available through Auth for convenience
+   */
+  async verifyBuilder(
+    builderId: string,
+    adminId: string,
+  ): Promise<UserResponseDto> {
+    const builder = await this.userRepository.findOne({
+      where: { id: builderId },
+    });
+
+    if (!builder) {
+      throw new NotFoundException('Builder not found');
+    }
+
+    if (builder.role !== UserRole.BUILDER) {
+      throw new BadRequestException('User is not a builder');
+    }
+
+    if (builder.isBuilderVerified) {
+      throw new BadRequestException('Builder is already verified');
+    }
+
+    // Verify the builder
+    builder.isBuilderVerified = true;
+    builder.builderVerifiedAt = new Date();
+    builder.verifiedBy = adminId;
+
+    const verifiedBuilder = await this.userRepository.save(builder);
+    this.logger.log(`Builder ${builderId} verified by admin ${adminId}`);
+
+    return UserResponseDto.fromEntity(verifiedBuilder);
   }
 }

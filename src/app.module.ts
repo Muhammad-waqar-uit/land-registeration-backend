@@ -11,6 +11,12 @@ import { PaymentsModule } from './payments/payments.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ContactModule } from './contact/contact.module';
 import { CommonModule } from './common/common.module';
+import { BuildersModule } from './builders/builders.module';
+import { ProjectsModule } from './projects/projects.module';
+import { AgreementsModule } from './agreements/agreements.module';
+import { PropertyRequestsModule } from './property-requests/property-requests.module';
+import { ResaleRequestsModule } from './resale-requests/resale-requests.module';
+import { InstallmentsModule } from './installments/installments.module';
 
 @Module({
   imports: [
@@ -26,6 +32,12 @@ import { CommonModule } from './common/common.module';
     ReservationsModule,
     ContactModule,
     CommonModule,
+    BuildersModule,
+    ProjectsModule,
+    AgreementsModule,
+    PropertyRequestsModule,
+    ResaleRequestsModule,
+    InstallmentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -46,6 +46,8 @@ export class PaymentsController {
       type: 'object',
       properties: {
         landId: { type: 'string', format: 'uuid', example: 'uuid' },
+        agreementId: { type: 'string', format: 'uuid', example: 'uuid' },
+        installmentId: { type: 'string', format: 'uuid', example: 'uuid' },
         amount: { type: 'number', example: 50000.0 },
         dueDate: { type: 'string', format: 'date', example: '2024-02-01' },
         paymentMode: { type: 'string', enum: ['bank', 'crypto'], example: 'bank' },
@@ -88,28 +90,28 @@ export class PaymentsController {
 
   @Get('pending')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.USER, UserRole.BUILDER)
-  @ApiOperation({ summary: 'Get pending payments for seller\'s lands (for verification)' })
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({ summary: 'Get pending payments for builder\'s properties (for verification)' })
   @ApiResponse({
     status: 200,
-    description: 'List of pending payments for seller\'s lands',
+    description: 'List of pending payments for builder\'s properties',
     type: [PaymentResponseDto],
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Seller only' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Builder only' })
   findPendingPayments(@CurrentUser() user: User) {
-    return this.paymentsService.findPendingPaymentsForSeller(user.id);
+    return this.paymentsService.findPendingPaymentsForBuilder(user.id);
   }
 
   @Post(':id/verify')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.USER, UserRole.BUILDER)
-  @ApiOperation({ summary: 'Verify or reject a payment (Seller only - for own lands)' })
+  @Roles(UserRole.BUILDER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Verify or reject a payment (Builder/Admin only - for own properties)' })
   @ApiResponse({
     status: 200,
     description: 'Payment verification result',
     type: PaymentResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Seller only, or payment not for your land' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Builder/Admin only, or payment not for your property' })
   @ApiResponse({ status: 404, description: 'Payment not found' })
   verify(
     @Param('id', ParseUUIDPipe) id: string,
