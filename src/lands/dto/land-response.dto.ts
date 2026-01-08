@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Land, LandStatus } from '../../entities/land.entity';
-import { User } from '../../entities/user.entity';
 
 class OwnerDto {
   @ApiProperty()
@@ -112,16 +111,16 @@ export class LandResponseDto {
       price: parseFloat(land.price.toString()),
       status: land.status,
       ownerId: land.ownerId,
-      documentCID: land.documentCID,
-      documentUrl: land.documentUrl,
-      documentIPFSHash: land.documentIPFSHash,
-      documentHash: land.documentHash,
-      imageCID: land.imageCID,
-      imageUrl: land.imageUrl,
-      imageIPFSHash: land.imageIPFSHash,
-      imageHash: land.imageHash,
-      blockchainLandId: land.blockchainLandId,
-      blockchainTxHash: land.blockchainTxHash,
+      documentCID: land.documentCID ?? undefined,
+      documentUrl: land.documentUrl ?? undefined,
+      documentIPFSHash: land.documentIPFSHash ?? undefined,
+      documentHash: land.documentHash ?? undefined,
+      imageCID: land.imageCID ?? undefined,
+      imageUrl: land.imageUrl ?? undefined,
+      imageIPFSHash: land.imageIPFSHash ?? undefined,
+      imageHash: land.imageHash ?? undefined,
+      blockchainLandId: land.blockchainLandId ?? undefined,
+      blockchainTxHash: land.blockchainTxHash ?? undefined,
       createdAt: land.createdAt,
       updatedAt: land.updatedAt,
     };

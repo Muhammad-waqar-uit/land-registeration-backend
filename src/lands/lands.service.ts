@@ -1007,6 +1007,15 @@ export class LandsService {
       };
     }
 
+    // Check if property is already listed for resale
+    if (property.status === LandStatus.RESALE_LISTED) {
+      return {
+        eligible: false,
+        message: 'Property is already listed for resale',
+        property,
+      };
+    }
+
     if (property.status !== LandStatus.OWNED) {
       return {
         eligible: false,
@@ -1019,15 +1028,6 @@ export class LandsService {
       return {
         eligible: false,
         message: 'Only the current owner can request to resell this property',
-        property,
-      };
-    }
-
-    // Check if property is already listed for resale
-    if (property.status === LandStatus.RESALE_LISTED) {
-      return {
-        eligible: false,
-        message: 'Property is already listed for resale',
         property,
       };
     }

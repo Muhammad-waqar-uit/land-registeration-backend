@@ -167,12 +167,11 @@ export class ResaleRequestsController {
   @ApiResponse({ status: 404, description: 'Resale request not found' })
   approve(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() respondDto?: RespondResaleRequestDto,
     @CurrentUser() user: User,
   ): Promise<ResaleRequestResponseDto> {
     return this.resaleRequestsService.respondToResaleRequest(
       id,
-      { status: ResaleRequestStatus.APPROVED, builderResponse: respondDto?.builderResponse },
+      { status: ResaleRequestStatus.APPROVED },
       user.id,
     );
   }
@@ -190,12 +189,11 @@ export class ResaleRequestsController {
   @ApiResponse({ status: 404, description: 'Resale request not found' })
   reject(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() respondDto?: RespondResaleRequestDto,
     @CurrentUser() user: User,
   ): Promise<ResaleRequestResponseDto> {
     return this.resaleRequestsService.respondToResaleRequest(
       id,
-      { status: ResaleRequestStatus.REJECTED, builderResponse: respondDto?.builderResponse },
+      { status: ResaleRequestStatus.REJECTED },
       user.id,
     );
   }

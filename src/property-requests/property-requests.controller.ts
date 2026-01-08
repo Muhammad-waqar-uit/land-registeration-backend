@@ -149,12 +149,11 @@ export class PropertyRequestsController {
   @ApiResponse({ status: 404, description: 'Property request not found' })
   approve(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() respondDto?: RespondPropertyRequestDto,
     @CurrentUser() user: User,
   ): Promise<PropertyRequestResponseDto> {
     return this.propertyRequestsService.respondToPropertyRequest(
       id,
-      { status: PropertyRequestStatus.APPROVED, builderResponse: respondDto?.builderResponse },
+      { status: PropertyRequestStatus.APPROVED },
       user.id,
     );
   }
@@ -172,12 +171,11 @@ export class PropertyRequestsController {
   @ApiResponse({ status: 404, description: 'Property request not found' })
   reject(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() respondDto?: RespondPropertyRequestDto,
     @CurrentUser() user: User,
   ): Promise<PropertyRequestResponseDto> {
     return this.propertyRequestsService.respondToPropertyRequest(
       id,
-      { status: PropertyRequestStatus.REJECTED, builderResponse: respondDto?.builderResponse },
+      { status: PropertyRequestStatus.REJECTED },
       user.id,
     );
   }

@@ -84,7 +84,7 @@ export class PaymentResponseDto {
       landId: payment.landId,
       buyerId: payment.buyerId,
       amount: parseFloat(payment.amount.toString()),
-      dueDate: payment.dueDate,
+      dueDate: payment.dueDate ?? new Date(),
       status: payment.status,
       paymentMode: payment.paymentMode,
       proofCID: payment.proofCID,

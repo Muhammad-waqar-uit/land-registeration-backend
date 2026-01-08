@@ -216,16 +216,16 @@ export class PaymentsService {
     const newTotalPaid = (land.totalPaid || 0) + createPaymentDto.amount;
     const isFullPayment = newTotalPaid >= land.price;
 
-    const payment = this.paymentRepository.create({
+    const payment = this.paymentRepository.create({ 
       landId: createPaymentDto.landId,
-      agreementId: createPaymentDto.agreementId || null,
-      installmentId: createPaymentDto.installmentId || null,
+      agreementId: createPaymentDto.agreementId ?? null,
+      installmentId: createPaymentDto.installmentId ?? null,
       buyerId,
       amount: createPaymentDto.amount,
       dueDate: createPaymentDto.dueDate ? new Date(createPaymentDto.dueDate) : null,
       paymentMode: createPaymentDto.paymentMode,
-      proofCID,
-      transactionHash: transactionHash || createPaymentDto.transactionHash || null,
+      proofCID: proofCID || undefined,
+      transactionHash: transactionHash || createPaymentDto.transactionHash || undefined,
       status: PaymentStatus.PENDING,
       paymentSequenceNumber,
       isFullPayment,
