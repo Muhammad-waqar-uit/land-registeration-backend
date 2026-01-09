@@ -73,6 +73,9 @@ export class Agreement {
   @Column({ type: 'varchar', length: 255, nullable: true })
   signedDocumentCID: string | null; // Signed version - local storage path
 
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  signedDocumentUrl: string | null; // Signed version - full URL to document
+
   @Column({ type: 'text', nullable: true })
   signedDocumentIPFSHash: string | null; // Signed version - IPFS hash
 
@@ -126,4 +129,3 @@ export class Agreement {
   @JoinColumn({ name: 'builderId' })
   builder: User;
 }
-

@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Installment, InstallmentStatus } from '../../entities/installment.entity';
+import {
+  Installment,
+  InstallmentStatus,
+} from '../../entities/installment.entity';
 
 export class InstallmentResponseDto {
   @ApiProperty({ description: 'Installment ID' })
@@ -26,10 +29,18 @@ export class InstallmentResponseDto {
   @ApiProperty({ enum: InstallmentStatus, description: 'Installment status' })
   status: InstallmentStatus;
 
-  @ApiProperty({ description: 'Actual payment date', required: false, nullable: true })
+  @ApiProperty({
+    description: 'Actual payment date',
+    required: false,
+    nullable: true,
+  })
   paymentDate: Date | null;
 
-  @ApiProperty({ description: 'Installment plan ID', required: false, nullable: true })
+  @ApiProperty({
+    description: 'Installment plan ID',
+    required: false,
+    nullable: true,
+  })
   installmentPlanId: string | null;
 
   @ApiProperty({ description: 'Created at' })
@@ -55,4 +66,3 @@ export class InstallmentResponseDto {
     };
   }
 }
-

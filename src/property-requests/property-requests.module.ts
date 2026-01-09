@@ -19,4 +19,3 @@ import { AgreementsModule } from '../agreements/agreements.module';
   exports: [PropertyRequestsService],
 })
 export class PropertyRequestsModule {}
-

@@ -15,4 +15,3 @@ export class RespondResaleRequestDto {
   })
   status: ResaleRequestStatus;
 }
-

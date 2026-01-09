@@ -5,9 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Land, LandStatus } from '../entities/land.entity';
-import { Reservation, ReservationStatus } from '../entities/reservation.entity';
 import { Payment, PaymentStatus } from '../entities/payment.entity';
 import { User, UserRole } from '../entities/user.entity';
 import { Project } from '../entities/project.entity';
@@ -26,8 +25,6 @@ export class LandsService {
   constructor(
     @InjectRepository(Land)
     private landRepository: Repository<Land>,
-    @InjectRepository(Reservation)
-    private reservationRepository: Repository<Reservation>,
     @InjectRepository(Payment)
     private paymentRepository: Repository<Payment>,
     @InjectRepository(User)
@@ -118,13 +115,13 @@ export class LandsService {
 
   /**
    * Create a new property (Builder-Centric Model)
-   * 
+   *
    * Business Logic:
    * - Only verified builders can create properties (enforced by role guard and verification check)
    * - Properties must belong to a project (projectId is required and validated)
    * - Builder owns property until sold (ownerId is set to builderId)
    * - Builder must be verified before listing properties
-   * 
+   *
    * @param createLandDto Property creation data
    * @param documentFile Optional property document file
    * @param imageFile Optional property image file
@@ -149,7 +146,9 @@ export class LandsService {
 
     // Builder must be verified to create properties
     if (!builder.isBuilderVerified) {
-      throw new ForbiddenException('Builder must be verified to create properties');
+      throw new ForbiddenException(
+        'Builder must be verified to create properties',
+      );
     }
 
     // Step 5.1: Validate project ownership
@@ -327,14 +326,14 @@ export class LandsService {
     }
 
     // Check permission (builder/owner or admin)
-    if (land.ownerId !== userId && userRole !== UserRole.ADMIN) {
+    if (land.ownerId !== userId && (userRole as UserRole) !== UserRole.ADMIN) {
       throw new ForbiddenException(
         'You do not have permission to update this property',
       );
     }
 
     // Check if land can be updated (not reserved, agreement_pending, payment_in_progress, owned, or resale_listed)
-    if (userRole !== UserRole.ADMIN) {
+    if ((userRole as UserRole) !== UserRole.ADMIN) {
       // Check land status - can't update if property has been sold or has active transactions
       if (
         land.status === LandStatus.RESERVED ||
@@ -371,7 +370,10 @@ export class LandsService {
         try {
           const fileName = land.documentCID.split('/').pop();
           if (fileName) {
-            await this.fileStorageService.deleteFile('land-documents', fileName);
+            await this.fileStorageService.deleteFile(
+              'land-documents',
+              fileName,
+            );
           }
         } catch (error) {
           console.error('Error deleting old document file:', error);
@@ -503,7 +505,7 @@ export class LandsService {
     return LandResponseDto.fromEntity(updatedLand);
   }
 
-  async remove(id: string, userId: string, userRole: string): Promise<void> {
+  async remove(id: string, userId: string, userRole: UserRole): Promise<void> {
     const land = await this.landRepository.findOne({
       where: { id },
     });
@@ -513,29 +515,21 @@ export class LandsService {
     }
 
     // Check permission (builder/owner or admin)
-    if (land.ownerId !== userId && userRole !== UserRole.ADMIN) {
+    if (
+      land.ownerId !== userId &&
+      (userRole as unknown as UserRole) !== UserRole.ADMIN
+    ) {
       throw new ForbiddenException(
         'You do not have permission to delete this property',
       );
     }
 
     // Check if land can be deleted (must be available, no transactions)
-    if (userRole !== UserRole.ADMIN) {
+    if ((userRole as unknown as UserRole) !== UserRole.ADMIN) {
       // Check land status - can only delete if available
       if (land.status !== LandStatus.AVAILABLE) {
         throw new BadRequestException(
           `Cannot delete property with status "${land.status}". Property must be available.`,
-        );
-      }
-
-      // Check for any reservations (active or cancelled)
-      const reservationCount = await this.reservationRepository.count({
-        where: { landId: id },
-      });
-
-      if (reservationCount > 0) {
-        throw new BadRequestException(
-          'Cannot delete land with existing reservations. This land has transaction history.',
         );
       }
 
@@ -587,8 +581,14 @@ export class LandsService {
   private async verifyFile(
     land: Land,
     fileType: 'document' | 'image',
-  ): Promise<{ verified: boolean; message: string; storedHash?: string; calculatedHash?: string }> {
-    const storedHash = fileType === 'document' ? land.documentHash : land.imageHash;
+  ): Promise<{
+    verified: boolean;
+    message: string;
+    storedHash?: string;
+    calculatedHash?: string;
+  }> {
+    const storedHash =
+      fileType === 'document' ? land.documentHash : land.imageHash;
     const filePath = fileType === 'document' ? land.documentCID : land.imageCID;
     const fileTypeName = fileType === 'document' ? 'document' : 'image';
     const bucket = fileType === 'document' ? 'land-documents' : 'land-images';
@@ -603,10 +603,13 @@ export class LandsService {
     try {
       // Extract filename from path (e.g., "land-documents/1234567890-doc.pdf" -> "1234567890-doc.pdf")
       const fileName = filePath.split('/').pop() || filePath;
-      
+
       // Read file from storage
-      const fileBuffer = await this.fileStorageService.readFile(bucket, fileName);
-      
+      const fileBuffer = await this.fileStorageService.readFile(
+        bucket,
+        fileName,
+      );
+
       // Calculate hash of stored file
       const calculatedHash = this.hashService.calculateSHA256(fileBuffer);
       const verified = this.hashService.verifyHash(fileBuffer, storedHash);
@@ -641,13 +644,21 @@ export class LandsService {
    * @param landId - Land ID
    * @returns Verification result for both document and image
    */
-  async verifyDocumentIntegrity(
-    landId: string,
-  ): Promise<{
+  async verifyDocumentIntegrity(landId: string): Promise<{
     verified: boolean;
     message: string;
-    document?: { verified: boolean; message: string; storedHash?: string; calculatedHash?: string };
-    image?: { verified: boolean; message: string; storedHash?: string; calculatedHash?: string };
+    document?: {
+      verified: boolean;
+      message: string;
+      storedHash?: string;
+      calculatedHash?: string;
+    };
+    image?: {
+      verified: boolean;
+      message: string;
+      storedHash?: string;
+      calculatedHash?: string;
+    };
   }> {
     const land = await this.landRepository.findOne({
       where: { id: landId },
@@ -667,7 +678,7 @@ export class LandsService {
     // Determine overall verification status
     const hasDocument = land.documentHash && land.documentCID;
     const hasImage = land.imageHash && land.imageCID;
-    
+
     let overallVerified = true;
     let overallMessage = '';
 
@@ -693,15 +704,26 @@ export class LandsService {
       // No files to verify
       return {
         verified: false,
-        message: 'No files available for verification. This land has no document or image uploaded.',
+        message:
+          'No files available for verification. This land has no document or image uploaded.',
       };
     }
 
     const result: {
       verified: boolean;
       message: string;
-      document?: { verified: boolean; message: string; storedHash?: string; calculatedHash?: string };
-      image?: { verified: boolean; message: string; storedHash?: string; calculatedHash?: string };
+      document?: {
+        verified: boolean;
+        message: string;
+        storedHash?: string;
+        calculatedHash?: string;
+      };
+      image?: {
+        verified: boolean;
+        message: string;
+        storedHash?: string;
+        calculatedHash?: string;
+      };
     } = {
       verified: overallVerified,
       message: overallMessage,
@@ -759,7 +781,8 @@ export class LandsService {
     if (!this.blockchainService.isContractAvailable()) {
       return {
         verified: false,
-        message: 'Blockchain service not available. Please configure blockchain settings.',
+        message:
+          'Blockchain service not available. Please configure blockchain settings.',
       };
     }
 
@@ -771,13 +794,15 @@ export class LandsService {
 
       if (verified) {
         // Get blockchain hash for comparison display
-        const blockchainData = await this.blockchainService.getLandFromBlockchain(
-          land.blockchainLandId,
-        );
+        const blockchainData =
+          await this.blockchainService.getLandFromBlockchain(
+            land.blockchainLandId,
+          );
 
         return {
           verified: true,
-          message: 'Document hash matches blockchain record. Document is authentic.',
+          message:
+            'Document hash matches blockchain record. Document is authentic.',
           databaseHash: land.documentHash,
           blockchainHash: blockchainData
             ? ethers.hexlify(blockchainData.documentHash)
@@ -785,13 +810,15 @@ export class LandsService {
           blockchainLandId: land.blockchainLandId,
         };
       } else {
-        const blockchainData = await this.blockchainService.getLandFromBlockchain(
-          land.blockchainLandId,
-        );
+        const blockchainData =
+          await this.blockchainService.getLandFromBlockchain(
+            land.blockchainLandId,
+          );
 
         return {
           verified: false,
-          message: 'Document hash does not match blockchain record. Document may have been tampered with.',
+          message:
+            'Document hash does not match blockchain record. Document may have been tampered with.',
           databaseHash: land.documentHash,
           blockchainHash: blockchainData
             ? ethers.hexlify(blockchainData.documentHash)
@@ -959,7 +986,8 @@ export class LandsService {
     if (property.isResale) {
       return {
         eligible: false,
-        message: 'This is a resale property. Use resale request process instead.',
+        message:
+          'This is a resale property. Use resale request process instead.',
         property,
       };
     }
@@ -971,7 +999,8 @@ export class LandsService {
     if (!owner || owner.role !== UserRole.BUILDER || !owner.isBuilderVerified) {
       return {
         eligible: false,
-        message: 'Property must belong to a verified builder to receive purchase requests',
+        message:
+          'Property must belong to a verified builder to receive purchase requests',
         property,
       };
     }
@@ -1051,7 +1080,15 @@ export class LandsService {
     page: number;
     limit: number;
   }> {
-    const { page = 1, limit = 10, status, projectId, isResale, minPrice, maxPrice } = query;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      projectId,
+      isResale,
+      minPrice,
+      maxPrice,
+    } = query;
 
     const queryBuilder = this.landRepository.createQueryBuilder('land');
 

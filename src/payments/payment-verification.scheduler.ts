@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Payment, PaymentStatus, PaymentMode } from '../entities/payment.entity';
+import {
+  Payment,
+  PaymentStatus,
+  PaymentMode,
+} from '../entities/payment.entity';
 import { Land, LandStatus } from '../entities/land.entity';
 import { BlockchainService } from '../common/services/blockchain.service';
 
@@ -56,7 +60,7 @@ export class PaymentVerificationScheduler {
         try {
           // Verify transaction on blockchain
           const verification = await this.blockchainService.verifyTransaction(
-            payment.transactionHash!,
+            payment.transactionHash,
             3, // Require at least 3 confirmations
           );
 
@@ -89,7 +93,10 @@ export class PaymentVerificationScheduler {
         }
       }
     } catch (error) {
-      this.logger.error('Error in crypto payment verification cron job:', error);
+      this.logger.error(
+        'Error in crypto payment verification cron job:',
+        error,
+      );
     }
   }
 

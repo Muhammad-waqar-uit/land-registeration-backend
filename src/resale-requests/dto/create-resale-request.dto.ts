@@ -20,4 +20,3 @@ export class CreateResaleRequestDto {
   @Min(0.01)
   requestedPrice: number;
 }
-

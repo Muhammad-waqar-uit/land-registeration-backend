@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
   ConflictException,
   Logger,
 } from '@nestjs/common';
@@ -61,7 +60,8 @@ export class BuildersService {
     if (user.role === UserRole.BUILDER) {
       // Update builder info
       if (registerDto.companyName) user.companyName = registerDto.companyName;
-      if (registerDto.licenseNumber) user.licenseNumber = registerDto.licenseNumber;
+      if (registerDto.licenseNumber)
+        user.licenseNumber = registerDto.licenseNumber;
       if (registerDto.cnic) user.cnic = registerDto.cnic;
       if (registerDto.phoneNumber) user.phoneNumber = registerDto.phoneNumber;
 
@@ -91,7 +91,9 @@ export class BuildersService {
     user.verifiedBy = null;
 
     const newBuilder = await this.userRepository.save(user);
-    this.logger.log(`User ${userId} registered as builder (pending verification)`);
+    this.logger.log(
+      `User ${userId} registered as builder (pending verification)`,
+    );
 
     return BuilderResponseDto.fromEntity(newBuilder);
   }
@@ -102,7 +104,8 @@ export class BuildersService {
   async verifyBuilder(
     builderId: string,
     adminId: string,
-    verifyDto?: VerifyBuilderDto,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _verifyDto?: VerifyBuilderDto,
   ): Promise<BuilderResponseDto> {
     const builder = await this.userRepository.findOne({
       where: { id: builderId },
@@ -189,7 +192,10 @@ export class BuildersService {
     }
 
     // Check if license number is being updated and if it's already taken
-    if (updateData.licenseNumber && updateData.licenseNumber !== builder.licenseNumber) {
+    if (
+      updateData.licenseNumber &&
+      updateData.licenseNumber !== builder.licenseNumber
+    ) {
       const existingBuilder = await this.userRepository.findOne({
         where: { licenseNumber: updateData.licenseNumber },
       });
@@ -202,10 +208,13 @@ export class BuildersService {
 
     // Update other fields
     if (updateData.name !== undefined) builder.name = updateData.name;
-    if (updateData.companyName !== undefined) builder.companyName = updateData.companyName;
+    if (updateData.companyName !== undefined)
+      builder.companyName = updateData.companyName;
     if (updateData.cnic !== undefined) builder.cnic = updateData.cnic;
-    if (updateData.fatherName !== undefined) builder.fatherName = updateData.fatherName;
-    if (updateData.phoneNumber !== undefined) builder.phoneNumber = updateData.phoneNumber;
+    if (updateData.fatherName !== undefined)
+      builder.fatherName = updateData.fatherName;
+    if (updateData.phoneNumber !== undefined)
+      builder.phoneNumber = updateData.phoneNumber;
 
     const updatedBuilder = await this.userRepository.save(builder);
     return BuilderResponseDto.fromEntity(updatedBuilder);
@@ -215,13 +224,15 @@ export class BuildersService {
    * List all builders (with optional filter for verified)
    */
   async findAll(verifiedOnly: boolean = false): Promise<BuilderResponseDto[]> {
-    const where: any = { role: UserRole.BUILDER };
+    const where: { role: UserRole; isBuilderVerified?: boolean } = {
+      role: UserRole.BUILDER,
+    };
     if (verifiedOnly) {
       where.isBuilderVerified = true;
     }
 
     const builders = await this.userRepository.find({
-      where,
+      where: where as { role: UserRole } & { isBuilderVerified?: boolean },
       order: { createdAt: 'DESC' },
     });
 
@@ -289,7 +300,8 @@ export class BuildersService {
 
     const totalProperties = properties.length;
     const availableProperties = properties.filter(
-      (p) => p.status === LandStatus.AVAILABLE || p.status === LandStatus.RESERVED,
+      (p) =>
+        p.status === LandStatus.AVAILABLE || p.status === LandStatus.RESERVED,
     ).length;
     const soldProperties = properties.filter(
       (p) => p.status === LandStatus.OWNED || p.status === LandStatus.SOLD,
@@ -297,7 +309,9 @@ export class BuildersService {
 
     // Calculate total sales (sum of prices of sold properties)
     const totalSales = properties
-      .filter((p) => p.status === 'owned' || p.status === 'sold')
+      .filter(
+        (p) => p.status === LandStatus.OWNED || p.status === LandStatus.SOLD,
+      )
       .reduce((sum, p) => sum + Number(p.price || 0), 0);
 
     return {
@@ -330,4 +344,3 @@ export class BuildersService {
     );
   }
 }
-

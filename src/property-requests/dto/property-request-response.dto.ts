@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { PropertyRequest, PropertyRequestStatus } from '../../entities/property-request.entity';
+import {
+  PropertyRequest,
+  PropertyRequestStatus,
+} from '../../entities/property-request.entity';
 
 export class PropertyRequestResponseDto {
   @ApiProperty({ description: 'Property Request ID' })
@@ -14,13 +17,25 @@ export class PropertyRequestResponseDto {
   @ApiProperty({ enum: PropertyRequestStatus, description: 'Request status' })
   status: PropertyRequestStatus;
 
-  @ApiProperty({ description: 'Buyer\'s requested price', required: false, nullable: true })
+  @ApiProperty({
+    description: "Buyer's requested price",
+    required: false,
+    nullable: true,
+  })
   requestedPrice: number | null;
 
-  @ApiProperty({ description: 'Builder\'s response message', required: false, nullable: true })
+  @ApiProperty({
+    description: "Builder's response message",
+    required: false,
+    nullable: true,
+  })
   builderResponse: string | null;
 
-  @ApiProperty({ description: 'Response timestamp', required: false, nullable: true })
+  @ApiProperty({
+    description: 'Response timestamp',
+    required: false,
+    nullable: true,
+  })
   respondedAt: Date | null;
 
   @ApiProperty({ description: 'Created at' })
@@ -43,4 +58,3 @@ export class PropertyRequestResponseDto {
     };
   }
 }
-

@@ -31,9 +31,7 @@ import { ResaleRequestStatus } from '../entities/resale-request.entity';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('JWT-auth')
 export class ResaleRequestsController {
-  constructor(
-    private readonly resaleRequestsService: ResaleRequestsService,
-  ) {}
+  constructor(private readonly resaleRequestsService: ResaleRequestsService) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a resale request (Property Owner)' })
@@ -48,10 +46,7 @@ export class ResaleRequestsController {
     @Body() createDto: CreateResaleRequestDto,
     @CurrentUser() user: User,
   ): Promise<ResaleRequestResponseDto> {
-    return this.resaleRequestsService.createResaleRequest(
-      createDto,
-      user.id,
-    );
+    return this.resaleRequestsService.createResaleRequest(createDto, user.id);
   }
 
   @Get()
@@ -68,10 +63,10 @@ export class ResaleRequestsController {
   }
 
   @Get('my-requests')
-  @ApiOperation({ summary: 'Get property owner\'s own resale requests' })
+  @ApiOperation({ summary: "Get property owner's own resale requests" })
   @ApiResponse({
     status: 200,
-    description: 'List of owner\'s resale requests',
+    description: "List of owner's resale requests",
     type: [ResaleRequestResponseDto],
   })
   findMyRequests(
@@ -84,20 +79,17 @@ export class ResaleRequestsController {
   @Get('builder')
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'Get builder\'s resale requests (Builder only)' })
+  @ApiOperation({ summary: "Get builder's resale requests (Builder only)" })
   @ApiResponse({
     status: 200,
-    description: 'List of resale requests for builder\'s properties',
+    description: "List of resale requests for builder's properties",
     type: [ResaleRequestResponseDto],
   })
   findBuilderRequests(
     @Query() query: QueryResaleRequestsDto,
     @CurrentUser() user: User,
   ) {
-    return this.resaleRequestsService.findBuilderResaleRequests(
-      user.id,
-      query,
-    );
+    return this.resaleRequestsService.findBuilderResaleRequests(user.id, query);
   }
 
   @Get(':id')
@@ -108,14 +100,18 @@ export class ResaleRequestsController {
     type: ResaleRequestResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Resale request not found' })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ResaleRequestResponseDto> {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ResaleRequestResponseDto> {
     return this.resaleRequestsService.findOne(id);
   }
 
   @Post(':id/respond')
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'Respond to resale request - Approve or Reject (Builder only)' })
+  @ApiOperation({
+    summary: 'Respond to resale request - Approve or Reject (Builder only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Resale request successfully responded to',
@@ -138,7 +134,9 @@ export class ResaleRequestsController {
   @Post(':id/list')
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'List property as resale after approval (Builder only)' })
+  @ApiOperation({
+    summary: 'List property as resale after approval (Builder only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Property successfully listed for resale',
@@ -217,4 +215,3 @@ export class ResaleRequestsController {
     return this.resaleRequestsService.markResaleAsSold(id, user.id, user.role);
   }
 }
-

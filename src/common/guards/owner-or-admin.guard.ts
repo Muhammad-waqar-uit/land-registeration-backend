@@ -4,30 +4,42 @@ import {
   ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
-import { User } from '../../entities/user.entity';
+import { User, UserRole } from '../../entities/user.entity';
 
 @Injectable()
 export class OwnerOrAdminGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const request = context.switchToHttp().getRequest();
-    const user: User = request.user;
-    const resource = request.resource;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const user = request.user as User | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const resource = request.resource as
+      | { ownerId?: string; userId?: string }
+      | undefined;
+
+    if (!user) {
+      throw new ForbiddenException('Authentication required');
+    }
 
     if (!resource) {
       throw new ForbiddenException('Resource not found');
     }
 
     // Admin has access to everything
-    if (user.role === 'admin') {
+    if (user.role === UserRole.ADMIN) {
       return true;
     }
 
     // Check if user is the owner
+
     const ownerId = resource.ownerId || resource.userId;
     if (user.id === ownerId) {
       return true;
     }
 
-    throw new ForbiddenException('You do not have permission to access this resource');
+    throw new ForbiddenException(
+      'You do not have permission to access this resource',
+    );
   }
 }

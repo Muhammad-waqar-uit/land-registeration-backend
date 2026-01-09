@@ -85,7 +85,7 @@ export class RegisterDto {
     required: false,
   })
   @IsOptional()
-  @ValidateIf((o) => o.role === UserRole.BUILDER)
+  @ValidateIf((o: RegisterDto) => o.role === UserRole.BUILDER)
   @IsNotEmpty({ message: 'Company name is required for builders' })
   @IsString()
   @MaxLength(255)
@@ -97,7 +97,7 @@ export class RegisterDto {
     required: false,
   })
   @IsOptional()
-  @ValidateIf((o) => o.role === UserRole.BUILDER)
+  @ValidateIf((o: RegisterDto) => o.role === UserRole.BUILDER)
   @IsNotEmpty({ message: 'License number is required for builders' })
   @IsString()
   @MaxLength(100)

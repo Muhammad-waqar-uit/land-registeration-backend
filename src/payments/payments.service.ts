@@ -18,6 +18,7 @@ import { User, UserRole } from '../entities/user.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { PaymentResponseDto } from './dto/payment-response.dto';
+import { InstallmentSummaryResponseDto } from './dto/installment-summary-response.dto';
 import { FileStorageService } from '../common/services/file-storage.service';
 import { BlockchainService } from '../common/services/blockchain.service';
 import { WalletService } from '../common/services/wallet.service';
@@ -69,7 +70,9 @@ export class PaymentsService {
 
       // Verify agreement belongs to this property and buyer
       if (agreement.propertyId !== createPaymentDto.landId) {
-        throw new BadRequestException('Agreement does not belong to this property');
+        throw new BadRequestException(
+          'Agreement does not belong to this property',
+        );
       }
 
       if (agreement.buyerId !== buyerId) {
@@ -78,7 +81,9 @@ export class PaymentsService {
 
       // Verify agreement is signed
       if (agreement.status !== AgreementStatus.SIGNED) {
-        throw new BadRequestException('Agreement must be signed before making payments');
+        throw new BadRequestException(
+          'Agreement must be signed before making payments',
+        );
       }
     }
 
@@ -96,17 +101,21 @@ export class PaymentsService {
 
       // Verify installment belongs to this property and buyer
       if (installment.landId !== createPaymentDto.landId) {
-        throw new BadRequestException('Installment does not belong to this property');
+        throw new BadRequestException(
+          'Installment does not belong to this property',
+        );
       }
 
       if (installment.buyerId !== buyerId) {
-        throw new ForbiddenException('Installment does not belong to this buyer');
+        throw new ForbiddenException(
+          'Installment does not belong to this buyer',
+        );
       }
 
       // Validate payment window
       const now = new Date();
       const paymentDate = now;
-      
+
       if (paymentDate < installment.paymentWindowStart) {
         throw new BadRequestException(
           `Payment is too early. Payment window starts on ${installment.paymentWindowStart.toLocaleDateString()}`,
@@ -216,16 +225,19 @@ export class PaymentsService {
     const newTotalPaid = (land.totalPaid || 0) + createPaymentDto.amount;
     const isFullPayment = newTotalPaid >= land.price;
 
-    const payment = this.paymentRepository.create({ 
+    const payment = this.paymentRepository.create({
       landId: createPaymentDto.landId,
       agreementId: createPaymentDto.agreementId ?? null,
       installmentId: createPaymentDto.installmentId ?? null,
       buyerId,
       amount: createPaymentDto.amount,
-      dueDate: createPaymentDto.dueDate ? new Date(createPaymentDto.dueDate) : null,
+      dueDate: createPaymentDto.dueDate
+        ? new Date(createPaymentDto.dueDate)
+        : null,
       paymentMode: createPaymentDto.paymentMode,
       proofCID: proofCID || undefined,
-      transactionHash: transactionHash || createPaymentDto.transactionHash || undefined,
+      transactionHash:
+        transactionHash || createPaymentDto.transactionHash || undefined,
       status: PaymentStatus.PENDING,
       paymentSequenceNumber,
       isFullPayment,
@@ -259,7 +271,9 @@ export class PaymentsService {
   /**
    * Find pending payments for builder (builder verifies payments, not seller)
    */
-  async findPendingPaymentsForBuilder(builderId: string): Promise<PaymentResponseDto[]> {
+  async findPendingPaymentsForBuilder(
+    builderId: string,
+  ): Promise<PaymentResponseDto[]> {
     // Find all pending payments for properties owned by this builder
     // For resale properties, use original builder
     const payments = await this.paymentRepository
@@ -286,7 +300,9 @@ export class PaymentsService {
    * @deprecated Use findPendingPaymentsForBuilder instead
    * Keep for backward compatibility
    */
-  async findPendingPaymentsForSeller(sellerId: string): Promise<PaymentResponseDto[]> {
+  async findPendingPaymentsForSeller(
+    sellerId: string,
+  ): Promise<PaymentResponseDto[]> {
     return this.findPendingPaymentsForBuilder(sellerId);
   }
 
@@ -341,7 +357,10 @@ export class PaymentsService {
       where: { id: builderId },
     });
 
-    if (!builder || (builder.role !== UserRole.ADMIN && !builder.isBuilderVerified)) {
+    if (
+      !builder ||
+      (builder.role !== UserRole.ADMIN && !builder.isBuilderVerified)
+    ) {
       throw new ForbiddenException(
         'Only verified builders or admins can verify payments',
       );
@@ -353,7 +372,7 @@ export class PaymentsService {
       : PaymentStatus.REJECTED;
     payment.remarks = verifyPaymentDto.remarks || null;
 
-    const updatedPayment = await this.paymentRepository.save(payment);
+    await this.paymentRepository.save(payment);
 
     // Update property payment tracking if payment is verified
     if (verifyPaymentDto.verified && payment.land) {
@@ -416,10 +435,7 @@ export class PaymentsService {
       throw new NotFoundException('Payment not found');
     }
 
-    return PaymentResponseDto.fromEntity(
-      updatedPaymentWithRelations,
-      true,
-    );
+    return PaymentResponseDto.fromEntity(updatedPaymentWithRelations, true);
   }
 
   /**
@@ -463,7 +479,9 @@ export class PaymentsService {
   /**
    * Find payments by property ID
    */
-  async findPaymentsByProperty(propertyId: string): Promise<PaymentResponseDto[]> {
+  async findPaymentsByProperty(
+    propertyId: string,
+  ): Promise<PaymentResponseDto[]> {
     const property = await this.landRepository.findOne({
       where: { id: propertyId },
     });
@@ -478,13 +496,17 @@ export class PaymentsService {
       order: { createdAt: 'DESC' },
     });
 
-    return payments.map((payment) => PaymentResponseDto.fromEntity(payment, true));
+    return payments.map((payment) =>
+      PaymentResponseDto.fromEntity(payment, true),
+    );
   }
 
   /**
    * Find payments by agreement ID
    */
-  async findPaymentsByAgreement(agreementId: string): Promise<PaymentResponseDto[]> {
+  async findPaymentsByAgreement(
+    agreementId: string,
+  ): Promise<PaymentResponseDto[]> {
     const agreement = await this.agreementRepository.findOne({
       where: { id: agreementId },
     });
@@ -499,19 +521,17 @@ export class PaymentsService {
       order: { createdAt: 'DESC' },
     });
 
-    return payments.map((payment) => PaymentResponseDto.fromEntity(payment, true));
+    return payments.map((payment) =>
+      PaymentResponseDto.fromEntity(payment, true),
+    );
   }
 
   /**
    * Get installment summary for a property
    */
-  async getInstallmentSummary(propertyId: string): Promise<{
-    totalPaid: number;
-    remainingBalance: number;
-    totalAmount: number;
-    payments: PaymentResponseDto[];
-    installments: any[];
-  }> {
+  async getInstallmentSummary(
+    propertyId: string,
+  ): Promise<InstallmentSummaryResponseDto> {
     const property = await this.landRepository.findOne({
       where: { id: propertyId },
       relations: ['project'],
@@ -530,16 +550,16 @@ export class PaymentsService {
     });
 
     return {
-      totalPaid: balanceInfo.totalPaid,
-      remainingBalance: balanceInfo.remainingBalance,
-      totalAmount: property.price,
+      totalPaid: parseFloat(balanceInfo.totalPaid.toString()),
+      remainingBalance: parseFloat(balanceInfo.remainingBalance.toString()),
+      totalAmount: parseFloat(property.price.toString()),
       payments,
       installments: installments.map((inst) => ({
         id: inst.id,
-        amount: inst.amount,
+        amount: parseFloat(inst.amount.toString()),
         paymentWindowStart: inst.paymentWindowStart,
         paymentWindowEnd: inst.paymentWindowEnd,
-        paymentDate: inst.paymentDate,
+        paymentDate: inst.paymentDate ?? undefined,
         status: inst.status,
       })),
     };

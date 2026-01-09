@@ -10,7 +10,6 @@ import {
 } from 'typeorm';
 import { Land } from './land.entity';
 import { Payment } from './payment.entity';
-import { Reservation } from './reservation.entity';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -83,7 +82,4 @@ export class User {
 
   @OneToMany(() => Payment, (payment) => payment.buyer)
   payments: Payment[];
-
-  @OneToMany(() => Reservation, (reservation) => reservation.buyer)
-  reservations: Reservation[];
 }

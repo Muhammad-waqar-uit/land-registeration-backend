@@ -43,7 +43,10 @@ export class PropertyRequestsController {
     description: 'Property request successfully created',
     type: PropertyRequestResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Property not eligible for requests' })
+  @ApiResponse({
+    status: 400,
+    description: 'Property not eligible for requests',
+  })
   @ApiResponse({ status: 409, description: 'Pending request already exists' })
   create(
     @Body() createDto: CreatePropertyRequestDto,
@@ -69,10 +72,10 @@ export class PropertyRequestsController {
   }
 
   @Get('my-requests')
-  @ApiOperation({ summary: 'Get buyer\'s own property requests' })
+  @ApiOperation({ summary: "Get buyer's own property requests" })
   @ApiResponse({
     status: 200,
-    description: 'List of buyer\'s property requests',
+    description: "List of buyer's property requests",
     type: [PropertyRequestResponseDto],
   })
   findMyRequests(
@@ -85,10 +88,12 @@ export class PropertyRequestsController {
   @Get('pending')
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'Get builder\'s pending property requests (Builder only)' })
+  @ApiOperation({
+    summary: "Get builder's pending property requests (Builder only)",
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of pending property requests for builder\'s properties',
+    description: "List of pending property requests for builder's properties",
     type: [PropertyRequestResponseDto],
   })
   findPendingRequests(
@@ -109,14 +114,18 @@ export class PropertyRequestsController {
     type: PropertyRequestResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Property request not found' })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<PropertyRequestResponseDto> {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PropertyRequestResponseDto> {
     return this.propertyRequestsService.findOne(id);
   }
 
   @Post(':id/respond')
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'Respond to property request - Approve or Reject (Builder only)' })
+  @ApiOperation({
+    summary: 'Respond to property request - Approve or Reject (Builder only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Property request successfully responded to',
@@ -196,4 +205,3 @@ export class PropertyRequestsController {
     return this.propertyRequestsService.cancelPropertyRequest(id, user.id);
   }
 }
-

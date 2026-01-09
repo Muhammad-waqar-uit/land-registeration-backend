@@ -95,4 +95,3 @@ export class CreateAgreementDto {
   @Type(() => AgreementTermsDto)
   terms?: AgreementTermsDto;
 }
-

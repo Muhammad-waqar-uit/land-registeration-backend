@@ -66,4 +66,3 @@ export class QueryResaleRequestsDto {
   @Min(1)
   limit?: number = 10;
 }
-

@@ -11,7 +11,8 @@ export class CreatePropertyRequestDto {
   propertyId: string;
 
   @ApiProperty({
-    description: 'Buyer\'s offer price (optional, if different from listed price)',
+    description:
+      "Buyer's offer price (optional, if different from listed price)",
     example: 245000.0,
     required: false,
   })
@@ -20,4 +21,3 @@ export class CreatePropertyRequestDto {
   @Min(0.01)
   requestedPrice?: number;
 }
-

@@ -3,7 +3,8 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateInstallmentsDto {
   @ApiProperty({
-    description: 'Agreement ID (installments are created from signed agreement)',
+    description:
+      'Agreement ID (installments are created from signed agreement)',
     example: 'uuid',
   })
   @IsNotEmpty()
@@ -11,7 +12,8 @@ export class CreateInstallmentsDto {
   agreementId: string;
 
   @ApiProperty({
-    description: 'Number of installments (optional, defaults based on plan years)',
+    description:
+      'Number of installments (optional, defaults based on plan years)',
     example: 12,
     required: false,
   })
@@ -20,4 +22,3 @@ export class CreateInstallmentsDto {
   @Min(1)
   numberOfInstallments?: number;
 }
-

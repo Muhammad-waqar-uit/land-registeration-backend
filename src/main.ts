@@ -9,7 +9,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  
+
   // Serve static files from uploads directory
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
@@ -37,9 +37,15 @@ async function bootstrap() {
       'JWT-auth',
     )
     .addTag('Auth', 'Authentication endpoints')
-    .addTag('Lands', 'Land management endpoints')
+    .addTag('Builders', 'Builder management endpoints')
+    .addTag('Projects', 'Project management endpoints')
+    .addTag('Properties', 'Property/Land management endpoints')
+    .addTag('Lands', 'Land management endpoints (alias for Properties)')
+    .addTag('Agreements', 'Agreement management and signing endpoints')
+    .addTag('Property Requests', 'Property purchase request endpoints')
+    .addTag('Resale Requests', 'Property resale request endpoints')
     .addTag('Payments', 'Payment processing endpoints')
-    .addTag('Reservations', 'Land reservation endpoints')
+    .addTag('Installments', 'Installment management endpoints')
     .addTag('Contact', 'Contact form endpoints')
     .build();
 
@@ -55,7 +61,12 @@ async function bootstrap() {
     origin: true, // Allow all origins
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'X-Requested-With',
+    ],
     exposedHeaders: ['Content-Type', 'Authorization'],
     preflightContinue: false,
     optionsSuccessStatus: 204,
@@ -84,4 +95,4 @@ async function bootstrap() {
   console.log(`Application is running on: http://localhost:${port}/api`);
   console.log(`Swagger documentation: http://localhost:${port}/api/docs`);
 }
-bootstrap();
+void bootstrap();

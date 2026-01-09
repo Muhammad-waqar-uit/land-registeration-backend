@@ -69,10 +69,10 @@ export class InstallmentsController {
   }
 
   @Get('my-installments')
-  @ApiOperation({ summary: 'Get buyer\'s own installments' })
+  @ApiOperation({ summary: "Get buyer's own installments" })
   @ApiResponse({
     status: 200,
-    description: 'List of buyer\'s installments',
+    description: "List of buyer's installments",
     type: [InstallmentResponseDto],
   })
   findMyInstallments(
@@ -90,7 +90,9 @@ export class InstallmentsController {
     type: InstallmentResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Installment not found' })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<InstallmentResponseDto> {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<InstallmentResponseDto> {
     return this.installmentsService.findOne(id);
   }
 
@@ -120,7 +122,8 @@ export class InstallmentsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Update overdue installments (Admin only - typically called via cron)',
+    summary:
+      'Update overdue installments (Admin only - typically called via cron)',
   })
   @ApiResponse({
     status: 200,
@@ -141,4 +144,3 @@ export class InstallmentsController {
     };
   }
 }
-

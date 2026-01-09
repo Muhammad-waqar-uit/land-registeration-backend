@@ -17,7 +17,9 @@ export class ContactService {
         contactDto.message,
       );
 
-      this.logger.log(`Contact form submitted by ${contactDto.name} (${contactDto.email})`);
+      this.logger.log(
+        `Contact form submitted by ${contactDto.name} (${contactDto.email})`,
+      );
 
       return {
         message: 'Contact form submitted successfully',

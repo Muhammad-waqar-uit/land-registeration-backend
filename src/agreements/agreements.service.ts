@@ -6,10 +6,17 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Agreement, AgreementType, AgreementStatus } from '../entities/agreement.entity';
+import {
+  Agreement,
+  AgreementType,
+  AgreementStatus,
+} from '../entities/agreement.entity';
 import { Land, LandStatus } from '../entities/land.entity';
 import { User, UserRole } from '../entities/user.entity';
-import { OwnershipHistory, TransferType } from '../entities/ownership-history.entity';
+import {
+  OwnershipHistory,
+  TransferType,
+} from '../entities/ownership-history.entity';
 import { CreateAgreementDto } from './dto/create-agreement.dto';
 import { SignAgreementDto } from './dto/sign-agreement.dto';
 import { QueryAgreementsDto } from './dto/query-agreements.dto';
@@ -53,7 +60,9 @@ export class AgreementsService {
     }
 
     if (!builder.isBuilderVerified) {
-      throw new ForbiddenException('Builder must be verified to create agreements');
+      throw new ForbiddenException(
+        'Builder must be verified to create agreements',
+      );
     }
 
     // Verify property exists and belongs to builder
@@ -114,7 +123,8 @@ export class AgreementsService {
         createAgreementDto.terms?.installmentPlanYears ||
         property.installmentPlanYears ||
         undefined,
-      paymentTerms: createAgreementDto.terms?.paymentTerms || 'As per installment plan',
+      paymentTerms:
+        createAgreementDto.terms?.paymentTerms || 'As per installment plan',
       propertyDetails: {
         title: property.title,
         location: property.location,
@@ -185,7 +195,7 @@ export class AgreementsService {
     // Step 5.3 Flow Step 1: Builder creates initial agreement
     // Step 5.3 Flow Step 2: Generate agreement document (PDF/HTML) - Done above
     // Step 5.3 Flow Step 3: Upload to IPFS - Done above
-    
+
     // Create agreement entity
     const agreement = this.agreementRepository.create({
       propertyId: createAgreementDto.propertyId,
@@ -393,11 +403,14 @@ This document is digitally stored and verifiable on the blockchain.
     }
 
     // Verify user is authorized to sign
-    const isBuilder = agreement.builderId === userId && userRole === UserRole.BUILDER;
+    const isBuilder =
+      agreement.builderId === userId && userRole === UserRole.BUILDER;
     const isBuyer = agreement.buyerId === userId;
 
     if (!isBuilder && !isBuyer) {
-      throw new ForbiddenException('You are not authorized to sign this agreement');
+      throw new ForbiddenException(
+        'You are not authorized to sign this agreement',
+      );
     }
 
     // Check if agreement can be signed
@@ -427,18 +440,22 @@ This document is digitally stored and verifiable on the blockchain.
       agreement.status = AgreementStatus.SIGNED;
 
       // Generate signed document
-      const signedDocument = await this.generateSignedAgreementDocument(agreement);
+      const signedDocument =
+        await this.generateSignedAgreementDocument(agreement);
 
       // Upload signed document
       const signedBuffer = Buffer.from(signedDocument, 'utf-8');
       const signedHash = this.hashService.calculateSHA256(signedBuffer);
 
-      const uploadResult = await this.fileStorageService.uploadFile('agreements', {
-        buffer: signedBuffer,
-        originalname: `signed-agreement-${agreementId}-${Date.now()}.txt`,
-        mimetype: 'text/plain',
-        size: signedBuffer.length,
-      } as Express.Multer.File);
+      const uploadResult = await this.fileStorageService.uploadFile(
+        'agreements',
+        {
+          buffer: signedBuffer,
+          originalname: `signed-agreement-${agreementId}-${Date.now()}.txt`,
+          mimetype: 'text/plain',
+          size: signedBuffer.length,
+        } as Express.Multer.File,
+      );
 
       let signedIPFSHash: string | null = null;
       try {
@@ -459,18 +476,23 @@ This document is digitally stored and verifiable on the blockchain.
       }
 
       agreement.signedDocumentCID = uploadResult.path;
+      agreement.signedDocumentUrl = uploadResult.url;
       agreement.signedDocumentIPFSHash = signedIPFSHash;
       agreement.signedDocumentHash = signedHash;
 
       // Step 5.3 Flow Step 6: Store signed document on IPFS (already done above)
       // Step 5.3 Flow Step 7: Store agreement hash on blockchain
-      if (this.blockchainService.isContractAvailable() && agreement.property.blockchainLandId) {
+      if (
+        this.blockchainService.isContractAvailable() &&
+        agreement.property.blockchainLandId
+      ) {
         try {
-          const blockchainResult = await this.blockchainService.storeAgreementHash(
-            agreement.property.blockchainLandId,
-            signedHash,
-            signedIPFSHash || '',
-          );
+          const blockchainResult =
+            await this.blockchainService.storeAgreementHash(
+              agreement.property.blockchainLandId,
+              signedHash,
+              signedIPFSHash || '',
+            );
 
           if (blockchainResult.success && blockchainResult.transactionHash) {
             agreement.blockchainTxHash = blockchainResult.transactionHash;
@@ -504,6 +526,128 @@ This document is digitally stored and verifiable on the blockchain.
   }
 
   /**
+   * Upload signed document file manually
+   * Allows uploading a scanned/physical signed document file
+   */
+  async uploadSignedDocument(
+    agreementId: string,
+    userId: string,
+    file: Express.Multer.File,
+  ): Promise<AgreementResponseDto> {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    const agreement = await this.agreementRepository.findOne({
+      where: { id: agreementId },
+      relations: ['property', 'buyer', 'builder'],
+    });
+
+    if (!agreement) {
+      throw new NotFoundException('Agreement not found');
+    }
+
+    // Verify user is authorized (buyer or builder)
+    const isAuthorized =
+      agreement.buyerId === userId || agreement.builderId === userId;
+    if (!isAuthorized) {
+      throw new ForbiddenException(
+        'You are not authorized to upload documents for this agreement',
+      );
+    }
+
+    // Verify agreement is signed or pending signature
+    if (
+      agreement.status !== AgreementStatus.SIGNED &&
+      agreement.status !== AgreementStatus.PENDING_SIGNATURE &&
+      agreement.status !== AgreementStatus.DRAFT
+    ) {
+      throw new BadRequestException(
+        `Cannot upload document. Agreement status: ${agreement.status}`,
+      );
+    }
+
+    // Calculate file hash
+    const documentHash = this.hashService.calculateSHA256(file.buffer);
+
+    // Upload to local storage (uploads/agreements/ folder)
+    const uploadResult = await this.fileStorageService.uploadFile(
+      'agreements',
+      file,
+    );
+
+    // Upload to IPFS
+    let documentIPFSHash: string | null = null;
+    try {
+      const ipfsResult = await this.ipfsService.uploadFile(file);
+      documentIPFSHash = this.ipfsService.formatIPFSHash(
+        ipfsResult.hash,
+        ipfsResult.gateway,
+        ipfsResult.timestamp,
+      );
+    } catch (error) {
+      console.error('Failed to upload signed document to IPFS:', error);
+    }
+
+    // Update agreement with uploaded signed document
+    if (!agreement.signedDocumentCID) {
+      agreement.signedDocumentCID = uploadResult.path;
+      agreement.signedDocumentUrl = uploadResult.url;
+      agreement.signedDocumentIPFSHash = documentIPFSHash;
+      agreement.signedDocumentHash = documentHash;
+
+      // If both parties have signed, mark as signed
+      if (
+        agreement.buyerSignedAt &&
+        agreement.builderSignedAt &&
+        agreement.status === AgreementStatus.PENDING_SIGNATURE
+      ) {
+        agreement.status = AgreementStatus.SIGNED;
+
+        // Store agreement hash on blockchain if available
+        if (
+          this.blockchainService.isContractAvailable() &&
+          agreement.property.blockchainLandId
+        ) {
+          try {
+            const blockchainResult =
+              await this.blockchainService.storeAgreementHash(
+                agreement.property.blockchainLandId,
+                documentHash,
+                documentIPFSHash || '',
+              );
+
+            if (blockchainResult.success && blockchainResult.transactionHash) {
+              agreement.blockchainTxHash = blockchainResult.transactionHash;
+            }
+          } catch (error) {
+            console.error(
+              'Failed to store agreement hash on blockchain:',
+              error,
+            );
+          }
+        }
+
+        // Update property status to enable payments
+        if (agreement.property.status === LandStatus.AGREEMENT_PENDING) {
+          agreement.property.status = LandStatus.PAYMENT_IN_PROGRESS;
+          await this.landRepository.save(agreement.property);
+        }
+      }
+    } else {
+      // Replace existing signed document
+      agreement.signedDocumentCID = uploadResult.path;
+      agreement.signedDocumentUrl = uploadResult.url;
+      agreement.signedDocumentIPFSHash = documentIPFSHash;
+      agreement.signedDocumentHash = documentHash;
+    }
+
+    const savedAgreement = await this.agreementRepository.save(agreement);
+
+    return AgreementResponseDto.fromEntity(savedAgreement);
+  }
+
+  /**
    * Generate signed agreement document with signature timestamps
    */
   private async generateSignedAgreementDocument(
@@ -521,21 +665,27 @@ This document is digitally stored and verifiable on the blockchain.
     const buyer = agreement.buyer;
     const builder = agreement.builder;
 
-    const buyerSignedDate = agreement.buyerSignedAt?.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const buyerSignedDate = agreement.buyerSignedAt?.toLocaleDateString(
+      'en-US',
+      {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      },
+    );
 
-    const builderSignedDate = agreement.builderSignedAt?.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const builderSignedDate = agreement.builderSignedAt?.toLocaleDateString(
+      'en-US',
+      {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      },
+    );
 
     const date = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
@@ -727,10 +877,13 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
       builderId,
     } = query;
 
-    const queryBuilder = this.agreementRepository.createQueryBuilder('agreement');
+    const queryBuilder =
+      this.agreementRepository.createQueryBuilder('agreement');
 
     if (agreementType) {
-      queryBuilder.where('agreement.agreementType = :agreementType', { agreementType });
+      queryBuilder.where('agreement.agreementType = :agreementType', {
+        agreementType,
+      });
     }
 
     if (status) {
@@ -738,7 +891,9 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
     }
 
     if (propertyId) {
-      queryBuilder.andWhere('agreement.propertyId = :propertyId', { propertyId });
+      queryBuilder.andWhere('agreement.propertyId = :propertyId', {
+        propertyId,
+      });
     }
 
     if (buyerId) {
@@ -756,7 +911,9 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
       .getManyAndCount();
 
     return {
-      data: agreements.map((agreement) => AgreementResponseDto.fromEntity(agreement)),
+      data: agreements.map((agreement) =>
+        AgreementResponseDto.fromEntity(agreement),
+      ),
       total,
       page,
       limit,
@@ -804,7 +961,9 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
     }
 
     // Check signatures
-    const signaturesVerified = !!(agreement.buyerSignedAt && agreement.builderSignedAt);
+    const signaturesVerified = !!(
+      agreement.buyerSignedAt && agreement.builderSignedAt
+    );
 
     // Verify document hash if signed document exists
     let documentVerified = false;
@@ -815,9 +974,14 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
         if (pathParts.length === 2) {
           const bucket = pathParts[0];
           const fileName = pathParts[1];
-          const fileBuffer = await this.fileStorageService.readFile(bucket, fileName);
+          const fileBuffer = await this.fileStorageService.readFile(
+            bucket,
+            fileName,
+          );
           const calculatedHash = this.hashService.calculateSHA256(fileBuffer);
-          documentVerified = calculatedHash.toLowerCase() === agreement.signedDocumentHash.toLowerCase();
+          documentVerified =
+            calculatedHash.toLowerCase() ===
+            agreement.signedDocumentHash.toLowerCase();
         }
       } catch (error) {
         console.error('Error verifying document:', error);
@@ -842,7 +1006,7 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
   /**
    * Step 5.5: Implement Ownership Transfer Logic
    * Complete ownership transfer after all payments are completed
-   * 
+   *
    * Flow:
    * 1. Check if all payments completed (or timeline met)
    * 2. Builder generates final ownership document
@@ -887,7 +1051,6 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
     const builder = agreement.builder;
 
     // Step 5.5 Flow Step 1: Check if all payments completed
-    const totalPaid = property.totalPaid || 0;
     const remainingBalance = property.remainingBalance ?? property.price;
 
     if (remainingBalance > 0) {
@@ -920,12 +1083,15 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
     const documentHash = this.hashService.calculateSHA256(documentBuffer);
 
     // Step 5.5 Flow Step 3: Upload to IPFS
-    const uploadResult = await this.fileStorageService.uploadFile('agreements', {
-      buffer: documentBuffer,
-      originalname: `final-ownership-${agreementId}-${Date.now()}.txt`,
-      mimetype: 'text/plain',
-      size: documentBuffer.length,
-    } as Express.Multer.File);
+    const uploadResult = await this.fileStorageService.uploadFile(
+      'agreements',
+      {
+        buffer: documentBuffer,
+        originalname: `final-ownership-${agreementId}-${Date.now()}.txt`,
+        mimetype: 'text/plain',
+        size: documentBuffer.length,
+      } as Express.Multer.File,
+    );
 
     let ipfsHash: string | null = null;
     try {
@@ -942,41 +1108,55 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
         ipfsResult.timestamp,
       );
     } catch (error) {
-      console.error('Failed to upload final ownership document to IPFS:', error);
+      console.error(
+        'Failed to upload final ownership document to IPFS:',
+        error,
+      );
     }
 
     // Step 5.5 Flow Step 4: Store hash on blockchain
     let blockchainTxHash: string | null = null;
-    if (this.blockchainService.isContractAvailable() && property.blockchainLandId) {
+    if (
+      this.blockchainService.isContractAvailable() &&
+      property.blockchainLandId
+    ) {
       try {
-        const blockchainResult = await this.blockchainService.storeOwnershipDocumentHash(
-          property.blockchainLandId,
-          documentHash,
-          ipfsHash || '',
-        );
+        const blockchainResult =
+          await this.blockchainService.storeOwnershipDocumentHash(
+            property.blockchainLandId,
+            documentHash,
+            ipfsHash || '',
+          );
 
         if (blockchainResult.success && blockchainResult.transactionHash) {
           blockchainTxHash = blockchainResult.transactionHash;
         }
       } catch (error) {
-        console.error('Failed to store ownership document hash on blockchain:', error);
+        console.error(
+          'Failed to store ownership document hash on blockchain:',
+          error,
+        );
       }
     }
 
-    // Step 5.5 Flow Step 5: Transfer ownership on blockchain (if buyer has wallet)
+    // Step 5.5 Flow Step 5: Transfer ownership on blockchain (calls sellerApproveTransfer with builder/seller address)
     if (
-      buyer.walletAddress &&
+      builder.walletAddress &&
       this.blockchainService.isContractAvailable() &&
       property.blockchainLandId
     ) {
       try {
+        // Transfer ownership on blockchain (sellerApproveTransfer requires seller/builder address)
         const transferResult = await this.blockchainService.transferOwnership(
           property.blockchainLandId,
-          buyer.walletAddress,
+          builder.walletAddress, // Seller/builder address for sellerApproveTransfer
         );
 
         if (transferResult.success && transferResult.transactionHash) {
-          blockchainTxHash = transferResult.transactionHash;
+          // Use ownership transfer transaction hash if available, otherwise use document hash tx
+          if (!blockchainTxHash) {
+            blockchainTxHash = transferResult.transactionHash;
+          }
         }
       } catch (error) {
         console.error('Failed to transfer ownership on blockchain:', error);
@@ -1036,4 +1216,3 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
     return AgreementResponseDto.fromEntity(finalAgreement);
   }
 }
-

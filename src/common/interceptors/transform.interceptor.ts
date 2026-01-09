@@ -10,20 +10,22 @@ import { map } from 'rxjs/operators';
 export interface Response<T> {
   data: T;
   message?: string;
+  success?: boolean;
 }
 
 @Injectable()
-export class TransformInterceptor<T>
-  implements NestInterceptor<T, Response<T>>
-{
+export class TransformInterceptor<T> implements NestInterceptor<
+  T,
+  Response<T>
+> {
   intercept(
     context: ExecutionContext,
-    next: CallHandler,
+    next: CallHandler<T>,
   ): Observable<Response<T>> {
     return next.handle().pipe(
-      map((data) => {
+      map((data: T): Response<T> => {
         if (data && typeof data === 'object' && 'data' in data) {
-          return data;
+          return data as Response<T>;
         }
         return {
           data,

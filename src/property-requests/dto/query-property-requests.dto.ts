@@ -57,4 +57,3 @@ export class QueryPropertyRequestsDto {
   @Min(1)
   limit?: number = 10;
 }
-

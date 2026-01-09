@@ -33,4 +33,3 @@ export class RefreshToken {
   @JoinColumn({ name: 'userId' })
   user: User;
 }
-

@@ -22,7 +22,10 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto';
+import {
+  RefreshTokenDto,
+  RefreshTokenResponseDto,
+} from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -112,7 +115,10 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized or incorrect current password' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized or incorrect current password',
+  })
   async updatePassword(
     @CurrentUser() user: User,
     @Body() updatePasswordDto: UpdatePasswordDto,
@@ -169,7 +175,9 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Generate or update wallet address for current user' })
+  @ApiOperation({
+    summary: 'Generate or update wallet address for current user',
+  })
   @ApiResponse({
     status: 200,
     description: 'Wallet address generated successfully',
@@ -191,7 +199,9 @@ export class AuthController {
     type: RefreshTokenResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
-  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
+  async refreshToken(
+    @Body() refreshTokenDto: RefreshTokenDto,
+  ): Promise<RefreshTokenResponseDto> {
     return this.authService.refreshToken(refreshTokenDto.refreshToken);
   }
 
@@ -199,7 +209,9 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Logout user and optionally invalidate refresh token' })
+  @ApiOperation({
+    summary: 'Logout user and optionally invalidate refresh token',
+  })
   @ApiBody({
     type: LogoutDto,
     required: false,
@@ -214,10 +226,7 @@ export class AuthController {
       },
     },
   })
-  async logout(
-    @CurrentUser() user: User,
-    @Body() logoutDto?: LogoutDto,
-  ) {
+  async logout(@CurrentUser() user: User, @Body() logoutDto?: LogoutDto) {
     // Invalidate refresh token if provided
     if (logoutDto?.refreshToken) {
       await this.authService.revokeRefreshToken(logoutDto.refreshToken);
@@ -242,7 +251,10 @@ export class AuthController {
     type: UserResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Builder not found' })
-  @ApiResponse({ status: 400, description: 'Builder already verified or not a builder' })
+  @ApiResponse({
+    status: 400,
+    description: 'Builder already verified or not a builder',
+  })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
   async verifyBuilder(
     @Param('id', ParseUUIDPipe) builderId: string,

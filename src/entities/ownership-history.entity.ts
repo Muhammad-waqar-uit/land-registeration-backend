@@ -64,4 +64,3 @@ export class OwnershipHistory {
   @JoinColumn({ name: 'agreementId' })
   agreement: Agreement;
 }
-

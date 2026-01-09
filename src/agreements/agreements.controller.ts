@@ -15,7 +15,6 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiQuery,
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
@@ -47,7 +46,10 @@ export class AgreementsController {
     description: 'Agreement successfully created',
     type: AgreementResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Builder only, must be verified' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Builder only, must be verified',
+  })
   @ApiResponse({ status: 404, description: 'Property or buyer not found' })
   create(
     @Body() createAgreementDto: CreateAgreementDto,
@@ -90,7 +92,9 @@ export class AgreementsController {
     type: AgreementResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Agreement not found' })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<AgreementResponseDto> {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<AgreementResponseDto> {
     return this.agreementsService.findOne(id);
   }
 
@@ -101,14 +105,22 @@ export class AgreementsController {
     description: 'Agreement successfully signed',
     type: AgreementResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Not authorized to sign' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Not authorized to sign',
+  })
   @ApiResponse({ status: 404, description: 'Agreement not found' })
   sign(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() signDto: SignAgreementDto,
     @CurrentUser() user: User,
   ): Promise<AgreementResponseDto> {
-    return this.agreementsService.signAgreement(id, user.id, user.role, signDto);
+    return this.agreementsService.signAgreement(
+      id,
+      user.id,
+      user.role,
+      signDto,
+    );
   }
 
   @Post(':id/generate-ownership-doc')
@@ -132,7 +144,11 @@ export class AgreementsController {
   @Post(':id/upload-signed')
   @UseInterceptors(FileInterceptor('document'))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload signed document' })
+  @ApiOperation({
+    summary: 'Upload signed document file',
+    description:
+      'Upload a scanned/physical signed agreement document file (PDF/image). The file will be stored locally, uploaded to IPFS, and its hash will be calculated for verification.',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -140,9 +156,10 @@ export class AgreementsController {
         document: {
           type: 'string',
           format: 'binary',
-          description: 'Signed agreement document',
+          description: 'Signed agreement document file (PDF, JPG, PNG, etc.)',
         },
       },
+      required: ['document'],
     },
   })
   @ApiResponse({
@@ -150,22 +167,24 @@ export class AgreementsController {
     description: 'Signed document uploaded successfully',
     type: AgreementResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'No file uploaded' })
+  @ApiResponse({
+    status: 403,
+    description: 'Not authorized to upload document',
+  })
   @ApiResponse({ status: 404, description: 'Agreement not found' })
   uploadSigned(
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: User,
   ): Promise<AgreementResponseDto> {
-    // This will be implemented in service - for now return findOne
-    // The service method can handle signed document upload
-    if (!file) {
-      throw new Error('No file uploaded');
-    }
-    return this.agreementsService.findOne(id);
+    return this.agreementsService.uploadSignedDocument(id, user.id, file);
   }
 
   @Post(':id/verify')
-  @ApiOperation({ summary: 'Verify agreement signatures and document integrity' })
+  @ApiOperation({
+    summary: 'Verify agreement signatures and document integrity',
+  })
   @ApiResponse({
     status: 200,
     description: 'Verification result',
@@ -185,4 +204,3 @@ export class AgreementsController {
     return this.agreementsService.verifyAgreement(id);
   }
 }
-

@@ -12,7 +12,7 @@ import {
   PropertyRequestStatus,
 } from '../entities/property-request.entity';
 import { Land, LandStatus } from '../entities/land.entity';
-import { User, UserRole } from '../entities/user.entity';
+import { User } from '../entities/user.entity';
 import { CreatePropertyRequestDto } from './dto/create-property-request.dto';
 import { RespondPropertyRequestDto } from './dto/respond-property-request.dto';
 import { QueryPropertyRequestsDto } from './dto/query-property-requests.dto';
@@ -33,7 +33,7 @@ export class PropertyRequestsService {
 
   /**
    * Step 5.2 Flow Step 1: Create purchase request (buyer action)
-   * 
+   *
    * Buyer initiates purchase request for an available property.
    * Property status changes to RESERVED to prevent other buyers from requesting.
    */
@@ -82,9 +82,8 @@ export class PropertyRequestsService {
       requestedPrice: createDto.requestedPrice || null,
     });
 
-    const savedRequest = await this.propertyRequestRepository.save(
-      propertyRequest,
-    );
+    const savedRequest =
+      await this.propertyRequestRepository.save(propertyRequest);
 
     // Update property status to RESERVED
     const property = eligibility.property;
@@ -98,7 +97,7 @@ export class PropertyRequestsService {
 
   /**
    * Step 5.2 Flow Steps 2-3: Builder approval/rejection of property request
-   * 
+   *
    * Flow:
    * 1. Buyer creates request (Step 1 - handled by createPropertyRequest)
    * 2. Builder reviews request (Step 2 - builder views pending requests)
@@ -178,7 +177,7 @@ export class PropertyRequestsService {
       // Property status changes to AGREEMENT_PENDING to indicate ready for agreement creation
       property.status = LandStatus.AGREEMENT_PENDING;
       await this.landRepository.save(property);
-      
+
       // Step 5.2 Flow Step 4: If approved → Create agreement
       // Note: Agreement creation is initiated separately by the builder
       // The builder can now create an agreement using the agreements endpoint
@@ -400,21 +399,13 @@ export class PropertyRequestsService {
   /**
    * Find all property requests with filters (admin or general query)
    */
-  async findAll(
-    query: QueryPropertyRequestsDto,
-  ): Promise<{
+  async findAll(query: QueryPropertyRequestsDto): Promise<{
     data: PropertyRequestResponseDto[];
     total: number;
     page: number;
     limit: number;
   }> {
-    const {
-      page = 1,
-      limit = 10,
-      status,
-      propertyId,
-      buyerId,
-    } = query;
+    const { page = 1, limit = 10, status, propertyId, buyerId } = query;
 
     const queryBuilder =
       this.propertyRequestRepository.createQueryBuilder('request');
@@ -515,7 +506,10 @@ export class PropertyRequestsService {
       });
 
       // If no other pending requests, set property back to AVAILABLE
-      if (pendingRequestsCount === 0 && property.status === LandStatus.RESERVED) {
+      if (
+        pendingRequestsCount === 0 &&
+        property.status === LandStatus.RESERVED
+      ) {
         property.status = LandStatus.AVAILABLE;
         await this.landRepository.save(property);
       }
@@ -524,4 +518,3 @@ export class PropertyRequestsService {
     return PropertyRequestResponseDto.fromEntity(savedRequest);
   }
 }
-

@@ -7,13 +7,19 @@ export class ProjectResponseDto {
   @ApiProperty({ description: 'Project ID', example: 'uuid' })
   id: string;
 
-  @ApiProperty({ description: 'Project name', example: 'Luxury Apartments Phase 1' })
+  @ApiProperty({
+    description: 'Project name',
+    example: 'Luxury Apartments Phase 1',
+  })
   name: string;
 
   @ApiProperty({ description: 'Project description', nullable: true })
   description: string | null;
 
-  @ApiProperty({ description: 'Project location', example: 'Downtown Area, City' })
+  @ApiProperty({
+    description: 'Project location',
+    example: 'Downtown Area, City',
+  })
   location: string;
 
   @ApiProperty({ description: 'Detailed location information', nullable: true })
@@ -28,13 +34,19 @@ export class ProjectResponseDto {
   @ApiProperty({ description: 'Number of sold units', example: 25 })
   soldUnits: number;
 
-  @ApiProperty({ description: 'Approval documents CID (local storage path)', nullable: true })
+  @ApiProperty({
+    description: 'Approval documents CID (local storage path)',
+    nullable: true,
+  })
   approvalDocumentsCID: string | null;
 
   @ApiProperty({ description: 'Approval documents URL', nullable: true })
   approvalDocumentsIPFSHash: string | null;
 
-  @ApiProperty({ description: 'Approval documents hash (SHA-256)', nullable: true })
+  @ApiProperty({
+    description: 'Approval documents hash (SHA-256)',
+    nullable: true,
+  })
   approvalDocumentsHash: string | null;
 
   @ApiProperty({ description: 'Builder ID' })
@@ -46,18 +58,25 @@ export class ProjectResponseDto {
   @ApiProperty({ description: 'Last update date' })
   updatedAt: Date;
 
-  @ApiProperty({ description: 'Builder information', type: BuilderResponseDto, required: false })
+  @ApiProperty({
+    description: 'Builder information',
+    type: BuilderResponseDto,
+    required: false,
+  })
   builder?: BuilderResponseDto;
 
-  @ApiProperty({ description: 'Properties in project', type: [LandResponseDto], required: false })
+  @ApiProperty({
+    description: 'Properties in project',
+    type: [LandResponseDto],
+    required: false,
+  })
   lands?: LandResponseDto[];
 
-  static fromEntity(project: Project, includeRelations = false): ProjectResponseDto {
-    const {
-      builder,
-      lands,
-      ...projectResponse
-    } = project;
+  static fromEntity(
+    project: Project,
+    includeRelations = false,
+  ): ProjectResponseDto {
+    const { builder, lands, ...projectResponse } = project;
 
     const response: ProjectResponseDto = {
       ...projectResponse,
@@ -75,4 +94,3 @@ export class ProjectResponseDto {
     return response;
   }
 }
-

@@ -8,7 +8,6 @@ import { databaseConfig } from './config/database.config';
 import { AuthModule } from './auth/auth.module';
 import { LandsModule } from './lands/lands.module';
 import { PaymentsModule } from './payments/payments.module';
-import { ReservationsModule } from './reservations/reservations.module';
 import { ContactModule } from './contact/contact.module';
 import { CommonModule } from './common/common.module';
 import { BuildersModule } from './builders/builders.module';
@@ -29,7 +28,6 @@ import { InstallmentsModule } from './installments/installments.module';
     AuthModule,
     LandsModule,
     PaymentsModule,
-    ReservationsModule,
     ContactModule,
     CommonModule,
     BuildersModule,

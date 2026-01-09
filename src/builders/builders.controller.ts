@@ -46,7 +46,10 @@ export class BuildersController {
     description: 'Builder registration successful (pending admin verification)',
     type: BuilderResponseDto,
   })
-  @ApiResponse({ status: 409, description: 'License number already registered' })
+  @ApiResponse({
+    status: 409,
+    description: 'License number already registered',
+  })
   async registerBuilder(
     @CurrentUser() user: User,
     @Body() registerDto: RegisterBuilderDto,
@@ -66,7 +69,10 @@ export class BuildersController {
     type: BuilderResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Builder not found' })
-  @ApiResponse({ status: 400, description: 'Builder already verified or not a builder' })
+  @ApiResponse({
+    status: 400,
+    description: 'Builder already verified or not a builder',
+  })
   async verifyBuilder(
     @Param('id') builderId: string,
     @CurrentUser() admin: User,
@@ -123,7 +129,8 @@ export class BuildersController {
   })
   async updateMe(
     @CurrentUser() user: User,
-    @Body() updateData: {
+    @Body()
+    updateData: {
       name?: string;
       email?: string;
       companyName?: string;
@@ -144,7 +151,9 @@ export class BuildersController {
     description: 'Current builder profile',
     type: BuilderResponseDto,
   })
-  async getCurrentBuilder(@CurrentUser() user: User): Promise<BuilderResponseDto> {
+  async getCurrentBuilder(
+    @CurrentUser() user: User,
+  ): Promise<BuilderResponseDto> {
     return this.buildersService.getCurrentBuilder(user.id);
   }
 
@@ -158,7 +167,8 @@ export class BuildersController {
   })
   async updateProfile(
     @CurrentUser() user: User,
-    @Body() updateData: {
+    @Body()
+    updateData: {
       name?: string;
       email?: string;
       companyName?: string;
@@ -237,4 +247,3 @@ export class BuildersController {
     return this.buildersService.findOne(id);
   }
 }
-

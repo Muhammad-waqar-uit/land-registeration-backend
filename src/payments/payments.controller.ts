@@ -22,6 +22,7 @@ import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { PaymentResponseDto } from './dto/payment-response.dto';
+import { InstallmentSummaryResponseDto } from './dto/installment-summary-response.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -50,7 +51,11 @@ export class PaymentsController {
         installmentId: { type: 'string', format: 'uuid', example: 'uuid' },
         amount: { type: 'number', example: 50000.0 },
         dueDate: { type: 'string', format: 'date', example: '2024-02-01' },
-        paymentMode: { type: 'string', enum: ['bank', 'crypto'], example: 'bank' },
+        paymentMode: {
+          type: 'string',
+          enum: ['bank', 'crypto'],
+          example: 'bank',
+        },
         transactionHash: { type: 'string' },
         proof: {
           type: 'string',
@@ -91,10 +96,12 @@ export class PaymentsController {
   @Get('pending')
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'Get pending payments for builder\'s properties (for verification)' })
+  @ApiOperation({
+    summary: "Get pending payments for builder's properties (for verification)",
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of pending payments for builder\'s properties',
+    description: "List of pending payments for builder's properties",
     type: [PaymentResponseDto],
   })
   @ApiResponse({ status: 403, description: 'Forbidden - Builder only' })
@@ -122,41 +129,45 @@ export class PaymentsController {
     type: [PaymentResponseDto],
   })
   @ApiResponse({ status: 404, description: 'Agreement not found' })
-  getAgreementPayments(@Param('agreementId', ParseUUIDPipe) agreementId: string) {
+  getAgreementPayments(
+    @Param('agreementId', ParseUUIDPipe) agreementId: string,
+  ) {
     return this.paymentsService.findPaymentsByAgreement(agreementId);
   }
 
   @Get('installment-summary/:propertyId')
-  @ApiOperation({ summary: 'Get payment summary (total paid, remaining, timeline)' })
+  @ApiOperation({
+    summary: 'Get payment summary (total paid, remaining, timeline)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Payment summary for the property',
-    schema: {
-      type: 'object',
-      properties: {
-        totalPaid: { type: 'number' },
-        remainingBalance: { type: 'number' },
-        totalAmount: { type: 'number' },
-        payments: { type: 'array' },
-        installments: { type: 'array' },
-      },
-    },
+    type: InstallmentSummaryResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Property not found' })
-  getInstallmentSummary(@Param('propertyId', ParseUUIDPipe) propertyId: string) {
+  getInstallmentSummary(
+    @Param('propertyId', ParseUUIDPipe) propertyId: string,
+  ): Promise<InstallmentSummaryResponseDto> {
     return this.paymentsService.getInstallmentSummary(propertyId);
   }
 
   @Post(':id/verify')
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Verify or reject a payment (Builder/Admin only - for own properties)' })
+  @ApiOperation({
+    summary:
+      'Verify or reject a payment (Builder/Admin only - for own properties)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Payment verification result',
     type: PaymentResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Builder/Admin only, or payment not for your property' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'Forbidden - Builder/Admin only, or payment not for your property',
+  })
   @ApiResponse({ status: 404, description: 'Payment not found' })
   verify(
     @Param('id', ParseUUIDPipe) id: string,

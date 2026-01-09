@@ -8,13 +8,9 @@ import { User } from '../entities/user.entity';
 import { LandsModule } from '../lands/lands.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([ResaleRequest, Land, User]),
-    LandsModule,
-  ],
+  imports: [TypeOrmModule.forFeature([ResaleRequest, Land, User]), LandsModule],
   controllers: [ResaleRequestsController],
   providers: [ResaleRequestsService],
   exports: [ResaleRequestsService],
 })
 export class ResaleRequestsModule {}
-

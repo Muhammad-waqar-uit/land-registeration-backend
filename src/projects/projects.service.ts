@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Project, ProjectStatus } from '../entities/project.entity';
 import { User, UserRole } from '../entities/user.entity';
 import { Land } from '../entities/land.entity';
@@ -51,7 +51,9 @@ export class ProjectsService {
     }
 
     if (!builder.isBuilderVerified) {
-      throw new ForbiddenException('Builder must be verified to create projects');
+      throw new ForbiddenException(
+        'Builder must be verified to create projects',
+      );
     }
 
     const project = this.projectRepository.create({
@@ -61,7 +63,9 @@ export class ProjectsService {
     });
 
     const savedProject = await this.projectRepository.save(project);
-    this.logger.log(`Project ${savedProject.id} created by builder ${builderId}`);
+    this.logger.log(
+      `Project ${savedProject.id} created by builder ${builderId}`,
+    );
 
     return ProjectResponseDto.fromEntity(savedProject);
   }
@@ -111,7 +115,10 @@ export class ProjectsService {
   /**
    * Get project by ID
    */
-  async findOne(id: string, includeRelations = false): Promise<ProjectResponseDto> {
+  async findOne(
+    id: string,
+    includeRelations = false,
+  ): Promise<ProjectResponseDto> {
     const project = await this.projectRepository.findOne({
       where: { id },
       relations: includeRelations ? ['builder', 'lands'] : [],
@@ -138,7 +145,7 @@ export class ProjectsService {
     id: string,
     updateProjectDto: UpdateProjectDto,
     userId: string,
-    userRole: string,
+    userRole: UserRole,
   ): Promise<ProjectResponseDto> {
     const project = await this.projectRepository.findOne({
       where: { id },
@@ -150,7 +157,9 @@ export class ProjectsService {
 
     // Check permission
     if (project.builderId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('You do not have permission to update this project');
+      throw new ForbiddenException(
+        'You do not have permission to update this project',
+      );
     }
 
     // Check if project can be updated (not completed or cancelled)
@@ -174,7 +183,7 @@ export class ProjectsService {
   /**
    * Delete project (Builder/Owner or Admin)
    */
-  async remove(id: string, userId: string, userRole: string): Promise<void> {
+  async remove(id: string, userId: string, userRole: UserRole): Promise<void> {
     const project = await this.projectRepository.findOne({
       where: { id },
     });
@@ -185,7 +194,9 @@ export class ProjectsService {
 
     // Check permission
     if (project.builderId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('You do not have permission to delete this project');
+      throw new ForbiddenException(
+        'You do not have permission to delete this project',
+      );
     }
 
     // Check if project has properties
@@ -212,7 +223,7 @@ export class ProjectsService {
     id: string,
     file: Express.Multer.File,
     userId: string,
-    userRole: string,
+    userRole: UserRole,
   ): Promise<ProjectResponseDto> {
     const project = await this.projectRepository.findOne({
       where: { id },
@@ -234,7 +245,10 @@ export class ProjectsService {
       try {
         const fileName = project.approvalDocumentsCID.split('/').pop();
         if (fileName) {
-          await this.fileStorageService.deleteFile('project-approvals', fileName);
+          await this.fileStorageService.deleteFile(
+            'project-approvals',
+            fileName,
+          );
         }
       } catch (error) {
         this.logger.error('Error deleting old approval document:', error);
@@ -250,7 +264,9 @@ export class ProjectsService {
     // Note: approvalDocumentsUrl would be stored if we add that field
 
     // Calculate SHA-256 hash for tamper detection
-    project.approvalDocumentsHash = this.hashService.calculateSHA256(file.buffer);
+    project.approvalDocumentsHash = this.hashService.calculateSHA256(
+      file.buffer,
+    );
 
     // Upload to IPFS
     try {
@@ -269,4 +285,3 @@ export class ProjectsService {
     return ProjectResponseDto.fromEntity(updatedProject);
   }
 }
-

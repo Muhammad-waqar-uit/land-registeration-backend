@@ -71,8 +71,10 @@ export class InstallmentsService {
     }
 
     const property = agreement.property;
-    const totalAmount = agreement.terms?.totalAmount || agreement.terms?.price || property.price;
-    const planYears = agreement.terms?.installmentPlanYears || property.installmentPlanYears;
+    const totalAmount =
+      agreement.terms?.totalAmount || agreement.terms?.price || property.price;
+    const planYears =
+      agreement.terms?.installmentPlanYears || property.installmentPlanYears;
 
     if (!planYears || (planYears !== 2 && planYears !== 3 && planYears !== 5)) {
       throw new BadRequestException(
@@ -137,9 +139,10 @@ export class InstallmentsService {
         landId: property.id,
         agreementId: agreement.id,
         buyerId: agreement.buyerId,
-        amount: i === numberOfInstallments - 1
-          ? totalAmount - installmentAmount * (numberOfInstallments - 1) // Last installment gets remainder
-          : installmentAmount,
+        amount:
+          i === numberOfInstallments - 1
+            ? totalAmount - installmentAmount * (numberOfInstallments - 1) // Last installment gets remainder
+            : installmentAmount,
         paymentWindowStart: windowStart,
         paymentWindowEnd: windowEnd,
         status: InstallmentStatus.PENDING,
@@ -148,7 +151,8 @@ export class InstallmentsService {
       installments.push(installment);
     }
 
-    const savedInstallments = await this.installmentRepository.save(installments);
+    const savedInstallments =
+      await this.installmentRepository.save(installments);
 
     return savedInstallments.map((installment) =>
       InstallmentResponseDto.fromEntity(installment),
@@ -343,4 +347,3 @@ export class InstallmentsService {
     };
   }
 }
-

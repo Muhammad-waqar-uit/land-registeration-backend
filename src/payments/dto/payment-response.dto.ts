@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Payment, PaymentStatus, PaymentMode } from '../../entities/payment.entity';
-import { Land } from '../../entities/land.entity';
-import { User } from '../../entities/user.entity';
+import {
+  Payment,
+  PaymentStatus,
+  PaymentMode,
+} from '../../entities/payment.entity';
 
 class LandInfoDto {
   @ApiProperty()
@@ -57,7 +59,10 @@ export class PaymentResponseDto {
   @ApiProperty({ description: 'Proof CID (IPFS)', required: false })
   proofCID?: string;
 
-  @ApiProperty({ description: 'Transaction hash (for crypto)', required: false })
+  @ApiProperty({
+    description: 'Transaction hash (for crypto)',
+    required: false,
+  })
   transactionHash?: string;
 
   @ApiProperty({ description: 'Remarks/notes', required: false })
@@ -69,10 +74,18 @@ export class PaymentResponseDto {
   @ApiProperty({ description: 'Last update date' })
   updatedAt: Date;
 
-  @ApiProperty({ description: 'Land information', type: LandInfoDto, required: false })
+  @ApiProperty({
+    description: 'Land information',
+    type: LandInfoDto,
+    required: false,
+  })
   land?: LandInfoDto;
 
-  @ApiProperty({ description: 'Buyer information', type: BuyerInfoDto, required: false })
+  @ApiProperty({
+    description: 'Buyer information',
+    type: BuyerInfoDto,
+    required: false,
+  })
   buyer?: BuyerInfoDto;
 
   static fromEntity(

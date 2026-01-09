@@ -10,7 +10,7 @@ export class FileStorageService {
   constructor() {
     // Store files in uploads directory
     this.uploadDir = join(process.cwd(), 'uploads');
-    
+
     // Create uploads directory if it doesn't exist
     if (!existsSync(this.uploadDir)) {
       mkdir(this.uploadDir, { recursive: true }).catch(() => {
@@ -53,7 +53,7 @@ export class FileStorageService {
 
   async deleteFile(bucket: string, fileName: string): Promise<void> {
     const filePath = join(this.uploadDir, bucket, fileName);
-    
+
     try {
       await unlink(filePath);
     } catch (error) {
@@ -64,7 +64,7 @@ export class FileStorageService {
     }
   }
 
-  async getPublicUrl(bucket: string, fileName: string): Promise<string> {
+  getPublicUrl(bucket: string, fileName: string): string {
     return `/uploads/${bucket}/${fileName}`;
   }
 
@@ -76,7 +76,7 @@ export class FileStorageService {
    */
   async readFile(bucket: string, filePath: string): Promise<Buffer> {
     const fullPath = join(this.uploadDir, bucket, filePath);
-    
+
     if (!existsSync(fullPath)) {
       throw new Error(`File not found: ${fullPath}`);
     }

@@ -74,7 +74,9 @@ export class ProjectsController {
     type: ProjectResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Project not found' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ProjectResponseDto> {
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ProjectResponseDto> {
     return this.projectsService.findOne(id);
   }
 
@@ -104,7 +106,12 @@ export class ProjectsController {
     @Body() updateProjectDto: UpdateProjectDto,
     @CurrentUser() user: User,
   ): Promise<ProjectResponseDto> {
-    return this.projectsService.update(id, updateProjectDto, user.id, user.role);
+    return this.projectsService.update(
+      id,
+      updateProjectDto,
+      user.id,
+      user.role,
+    );
   }
 
   @Delete(':id')
@@ -122,7 +129,9 @@ export class ProjectsController {
   @Roles(UserRole.BUILDER, UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('document'))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload project approval documents (Builder or Admin)' })
+  @ApiOperation({
+    summary: 'Upload project approval documents (Builder or Admin)',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -148,7 +157,11 @@ export class ProjectsController {
     if (!file) {
       throw new Error('No file uploaded');
     }
-    return this.projectsService.uploadApprovalDocuments(id, file, user.id, user.role);
+    return this.projectsService.uploadApprovalDocuments(
+      id,
+      file,
+      user.id,
+      user.role,
+    );
   }
 }
-

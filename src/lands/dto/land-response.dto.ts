@@ -26,7 +26,10 @@ export class LandResponseDto {
   @ApiProperty({ description: 'Land title', example: 'Beachfront Property' })
   title: string;
 
-  @ApiProperty({ description: 'Land location', example: '123 Ocean Drive, Miami' })
+  @ApiProperty({
+    description: 'Land location',
+    example: '123 Ocean Drive, Miami',
+  })
   location: string;
 
   @ApiProperty({ description: 'Land size in square meters', example: 500.5 })
@@ -41,26 +44,40 @@ export class LandResponseDto {
   @ApiProperty({ description: 'Owner ID', example: 'uuid' })
   ownerId: string;
 
-  @ApiProperty({ description: 'Document CID (local storage path)', required: false })
+  @ApiProperty({
+    description: 'Document CID (local storage path)',
+    required: false,
+  })
   documentCID?: string;
 
-  @ApiProperty({ description: 'Document URL (full URL for viewing)', required: false })
+  @ApiProperty({
+    description: 'Document URL (full URL for viewing)',
+    required: false,
+  })
   documentUrl?: string;
 
-  @ApiProperty({ description: 'Image CID (local storage path)', required: false })
+  @ApiProperty({
+    description: 'Image CID (local storage path)',
+    required: false,
+  })
   imageCID?: string;
 
-  @ApiProperty({ description: 'Image URL (full URL for viewing)', required: false })
+  @ApiProperty({
+    description: 'Image URL (full URL for viewing)',
+    required: false,
+  })
   imageUrl?: string;
 
   @ApiProperty({
-    description: 'Document IPFS hash (JSON string with structure: {hash: string, gateway: string, timestamp: string})',
+    description:
+      'Document IPFS hash (JSON string with structure: {hash: string, gateway: string, timestamp: string})',
     required: false,
   })
   documentIPFSHash?: string;
 
   @ApiProperty({
-    description: 'Image IPFS hash (JSON string with structure: {hash: string, gateway: string, timestamp: string})',
+    description:
+      'Image IPFS hash (JSON string with structure: {hash: string, gateway: string, timestamp: string})',
     required: false,
   })
   imageIPFSHash?: string;
@@ -88,7 +105,8 @@ export class LandResponseDto {
 
   @ApiProperty({
     description: 'Blockchain transaction hash when land was registered',
-    example: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    example:
+      '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     required: false,
   })
   blockchainTxHash?: string;
@@ -99,7 +117,11 @@ export class LandResponseDto {
   @ApiProperty({ description: 'Last update date' })
   updatedAt: Date;
 
-  @ApiProperty({ description: 'Owner information', type: OwnerDto, required: false })
+  @ApiProperty({
+    description: 'Owner information',
+    type: OwnerDto,
+    required: false,
+  })
   owner?: OwnerDto;
 
   static fromEntity(land: Land, includeOwner = false): LandResponseDto {

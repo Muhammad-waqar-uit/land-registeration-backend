@@ -17,7 +17,6 @@ export class EmailService {
     const emailPort = this.configService.get<number>('EMAIL_PORT');
     const emailUser = this.configService.get<string>('EMAIL_USER');
     const emailPassword = this.configService.get<string>('EMAIL_PASSWORD');
-    const emailFrom = this.configService.get<string>('EMAIL_FROM');
 
     // If email is not configured, use console logging (development mode)
     if (!emailHost || !emailUser || !emailPassword) {
@@ -32,14 +31,16 @@ export class EmailService {
 
     // Trim whitespace from password (common issue: spaces in app passwords)
     const trimmedPassword = emailPassword.trim().replace(/\s+/g, '');
-    
+
     // Log configuration (without showing password)
     this.logger.log('Email service configuration:');
     this.logger.log(`  Host: ${emailHost}`);
     this.logger.log(`  Port: ${emailPort || 587}`);
     this.logger.log(`  User: ${emailUser}`);
-    this.logger.log(`  Password: ${trimmedPassword.length > 0 ? '***' + trimmedPassword.slice(-4) : 'NOT SET'}`);
-    
+    this.logger.log(
+      `  Password: ${trimmedPassword.length > 0 ? '***' + trimmedPassword.slice(-4) : 'NOT SET'}`,
+    );
+
     // Warn if password had spaces
     if (emailPassword !== trimmedPassword) {
       this.logger.warn(
@@ -61,10 +62,12 @@ export class EmailService {
     this.logger.log('Email service initialized');
   }
 
-  async sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
+  async sendPasswordResetEmail(
+    email: string,
+    resetToken: string,
+  ): Promise<void> {
     const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') ||
-      'http://localhost:3000';
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
     const subject = 'Password Reset Request';
@@ -180,7 +183,7 @@ Land Registration Team
     const toEmail = emailFrom;
 
     const subject = `New Contact Form Submission from ${name}`;
-    
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -314,34 +317,41 @@ This email was sent from the contact form on your website.
     }
 
     try {
-      const info = await this.transporter.sendMail({
+      const info = (await this.transporter.sendMail({
         from: emailFrom,
         to,
         subject,
         text,
         html,
-      });
+      })) as { messageId: string };
 
       this.logger.log(`Email sent successfully to ${to}`);
       this.logger.debug(`Message ID: ${info.messageId}`);
     } catch (error) {
       const errorMessage = (error as Error).message;
       this.logger.error(`Failed to send email to ${to}:`, error);
-      
+
       // Provide helpful error messages for common Gmail errors
-      if (errorMessage.includes('Invalid login') || errorMessage.includes('BadCredentials')) {
+      if (
+        errorMessage.includes('Invalid login') ||
+        errorMessage.includes('BadCredentials')
+      ) {
         this.logger.error('');
         this.logger.error('🔴 GMAIL AUTHENTICATION ERROR');
         this.logger.error('Common causes:');
-        this.logger.error('  1. App password has spaces (remove all spaces from EMAIL_PASSWORD)');
-        this.logger.error('  2. Using regular Gmail password instead of App Password');
+        this.logger.error(
+          '  1. App password has spaces (remove all spaces from EMAIL_PASSWORD)',
+        );
+        this.logger.error(
+          '  2. Using regular Gmail password instead of App Password',
+        );
         this.logger.error('  3. 2-Step Verification not enabled');
         this.logger.error('  4. App password was revoked or expired');
         this.logger.error('');
         this.logger.error('See GMAIL_TROUBLESHOOTING.md for detailed help');
         this.logger.error('');
       }
-      
+
       throw new Error(`Failed to send email: ${errorMessage}`);
     }
   }
@@ -360,9 +370,12 @@ This email was sent from the contact form on your website.
     } catch (error) {
       const errorMessage = (error as Error).message;
       this.logger.error('❌ Email service connection failed:', errorMessage);
-      
+
       // Provide helpful error messages
-      if (errorMessage.includes('Invalid login') || errorMessage.includes('BadCredentials')) {
+      if (
+        errorMessage.includes('Invalid login') ||
+        errorMessage.includes('BadCredentials')
+      ) {
         this.logger.error('');
         this.logger.error('🔴 GMAIL AUTHENTICATION ERROR');
         this.logger.error('Fix: Check your EMAIL_PASSWORD in .env file');
@@ -371,7 +384,7 @@ This email was sent from the contact form on your website.
         this.logger.error('   - Ensure 2-Step Verification is enabled');
         this.logger.error('');
       }
-      
+
       return false;
     }
   }

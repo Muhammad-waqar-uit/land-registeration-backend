@@ -11,7 +11,11 @@ export class BuilderResponseDto {
   @ApiProperty({ description: 'User email', example: 'john@example.com' })
   email: string;
 
-  @ApiProperty({ description: 'User role', enum: UserRole, example: UserRole.BUILDER })
+  @ApiProperty({
+    description: 'User role',
+    enum: UserRole,
+    example: UserRole.BUILDER,
+  })
   role: UserRole;
 
   @ApiProperty({
@@ -52,15 +56,9 @@ export class BuilderResponseDto {
   updatedAt: Date;
 
   static fromEntity(user: User): BuilderResponseDto {
-    const {
-      password,
-      ownedLands,
-      payments,
-      reservations,
-      verifier,
-      ...builderResponse
-    } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ownedLands, payments, verifier, ...builderResponse } =
+      user;
     return builderResponse;
   }
 }
-

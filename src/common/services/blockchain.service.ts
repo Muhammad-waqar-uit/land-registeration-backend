@@ -42,28 +42,48 @@ export interface MakePaymentResult {
   error?: string;
 }
 
-// Smart Contract ABI (updated for admin-only, address-parameter functions)
+// Smart Contract ABI (updated for admin-only, address-parameter functions and builder-centric features)
 const LAND_REGISTRY_ABI = [
+  // Land registration and management
   'function registerLand(address _owner, string memory _ipfsHash, bytes32 _documentHash, uint256 _totalPrice) external',
   'function lockLandToBuyer(uint256 landId, address buyer) external',
   'function updateLand(uint256 landId, string memory _ipfsHash, bytes32 _documentHash, uint256 _totalPrice) external',
   'function sellerApproveUpdate(uint256 landId, address seller) external',
   'function sellerRevokeUpdateApproval(uint256 landId, address seller) external',
+  'function adminUnlockLand(uint256 landId) external',
+  // Payments
   'function makePayment(uint256 landId, address buyer, uint256 amount) external',
   'function submitBankPayment(uint256 landId, address buyer, uint256 amount, string memory proofHash) external',
   'function verifyBankPayment(uint256 landId, bool approved) external',
+  // Ownership transfer
   'function sellerApproveTransfer(uint256 landId, address seller) external',
   'function sellerRevokeApproval(uint256 landId, address seller) external',
   'function requestRefund(uint256 landId, address buyer) external',
-  'function adminUnlockLand(uint256 landId) external',
+  // Builder registry
+  'function registerBuilder(address builderAddress, string memory licenseNumber) external',
+  'function grantBuilderRole(address builder) external',
+  'function revokeBuilderRole(address builder) external',
+  'function getBuilderInfo(address builderAddress) view returns (address, string memory, bool, uint256)',
+  'function isLicenseRegistered(string memory licenseNumber) view returns (bool, address)',
+  // Agreement and ownership document storage
+  'function storeAgreementHash(uint256 landId, bytes32 agreementHash, string memory agreementIPFSHash) external',
+  'function storeOwnershipDocumentHash(uint256 landId, bytes32 documentHash, string memory documentIPFSHash) external',
+  // View functions
   'function getPaymentBreakdown(uint256 landId) view returns (uint256 totalPaid, uint256 cryptoPaid, uint256 bankPaid, uint256 remaining)',
+  'function getAgreementHash(uint256 landId) view returns (bytes32, string memory, uint256, bool)',
+  'function getOwnershipDocumentHash(uint256 landId) view returns (bytes32, string memory, uint256, bool)',
+  'function getSellerApprovalStatus(uint256 landId) view returns (bool, bool, address)',
   'function lands(uint256) view returns (address owner, address seller, string memory ipfsHash, bytes32 documentHash, uint256 totalPrice, address lockedTo)',
   'function isRegistered(uint256) view returns (bool)',
   'function nextLandId() view returns (uint256)',
+  // Events
   'event LandLocked(uint256 indexed landId, address indexed buyer)',
   'event LandUpdateRequested(uint256 indexed landId, address indexed seller, bytes32 newDocumentHash)',
   'event LandUpdateApproved(uint256 indexed landId, address indexed seller)',
   'event PaymentReceived(uint256 indexed landId, address indexed buyer, uint256 amount, bool isBankPayment)',
+  'event BuilderRegistered(address indexed builder, string licenseNumber, uint256 registeredAt)',
+  'event AgreementHashStored(uint256 indexed landId, bytes32 agreementHash, string agreementIPFSHash, uint256 storedAt)',
+  'event OwnershipDocumentHashStored(uint256 indexed landId, bytes32 documentHash, string documentIPFSHash, uint256 storedAt)',
 ];
 
 // ERC20 Token ABI
@@ -174,7 +194,8 @@ export class BlockchainService {
 
     try {
       // Get transaction receipt
-      const receipt = await this.provider.getTransactionReceipt(transactionHash);
+      const receipt =
+        await this.provider.getTransactionReceipt(transactionHash);
 
       if (!receipt) {
         // Transaction not found or not yet mined
@@ -224,7 +245,9 @@ export class BlockchainService {
   /**
    * Get transaction details
    */
-  async getTransaction(txHash: string): Promise<ethers.TransactionResponse | null> {
+  async getTransaction(
+    txHash: string,
+  ): Promise<ethers.TransactionResponse | null> {
     if (!this.provider) {
       return null;
     }
@@ -261,14 +284,17 @@ export class BlockchainService {
     if (!this.isContractAvailable()) {
       return {
         success: false,
-        error: 'Smart contract not available. Please configure blockchain settings.',
+        error:
+          'Smart contract not available. Please configure blockchain settings.',
       };
     }
 
     try {
       // Convert document hash from hex string to bytes32
       const documentHashBytes32 = ethers.hexlify(
-        ethers.getBytes(documentHash.startsWith('0x') ? documentHash : `0x${documentHash}`),
+        ethers.getBytes(
+          documentHash.startsWith('0x') ? documentHash : `0x${documentHash}`,
+        ),
       );
 
       // Ensure it's exactly 32 bytes (64 hex chars)
@@ -281,22 +307,23 @@ export class BlockchainService {
       }
 
       // Get next land ID before registration (for reference)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const nextLandIdBefore = await this.contract!.nextLandId();
 
       // Call registerLand function
-      const tx = await this.contract!.registerLand(
+      const tx = (await this.contract!.registerLand(
         ownerAddress,
         ipfsHash,
         documentHashBytes32,
         totalPrice,
-      );
+      )) as ethers.ContractTransactionResponse;
 
       this.logger.log(
         `Registering land on blockchain. Transaction: ${tx.hash}`,
       );
 
       // Wait for transaction to be mined
-      const receipt = await tx.wait();
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
 
       if (!receipt || receipt.status !== 1) {
         return {
@@ -340,20 +367,24 @@ export class BlockchainService {
     if (!this.isContractAvailable()) {
       return {
         success: false,
-        error: 'Smart contract not available. Please configure blockchain settings.',
+        error:
+          'Smart contract not available. Please configure blockchain settings.',
       };
     }
 
     try {
       // Call lockLandToBuyer function (admin-only, backend calls on behalf of buyer)
-      const tx = await this.contract!.lockLandToBuyer(landId, buyerAddress);
+      const tx = (await this.contract!.lockLandToBuyer(
+        landId,
+        buyerAddress,
+      )) as ethers.ContractTransactionResponse;
 
       this.logger.log(
         `Locking land ${landId} to buyer ${buyerAddress} on blockchain. Transaction: ${tx.hash}`,
       );
 
       // Wait for transaction to be mined
-      const receipt = await tx.wait();
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
 
       if (!receipt || receipt.status !== 1) {
         return {
@@ -398,20 +429,24 @@ export class BlockchainService {
     }
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const landData = await this.contract!.lands(landId);
       return {
-        owner: landData[0],
-        seller: landData[1],
-        ipfsHash: landData[2],
-        documentHash: landData[3],
-        totalPrice: landData[4],
-        lockedTo: landData[5],
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        owner: landData[0] as string,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        seller: landData[1] as string,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        ipfsHash: landData[2] as string,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        documentHash: landData[3] as string,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        totalPrice: landData[4] as bigint,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        lockedTo: landData[5] as string,
       };
     } catch (error) {
-      this.logger.error(
-        `Error getting land ${landId} from blockchain:`,
-        error,
-      );
+      this.logger.error(`Error getting land ${landId} from blockchain:`, error);
       return null;
     }
   }
@@ -453,6 +488,7 @@ export class BlockchainService {
     }
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       return await this.contract!.isRegistered(landId);
     } catch (error) {
       this.logger.error(
@@ -480,14 +516,17 @@ export class BlockchainService {
     if (!this.isContractAvailable()) {
       return {
         success: false,
-        error: 'Smart contract not available. Please configure blockchain settings.',
+        error:
+          'Smart contract not available. Please configure blockchain settings.',
       };
     }
 
     try {
       // Convert document hash from hex string to bytes32
       let documentHashBytes32: string;
-      const requiresDocumentUpdate = !!(documentHash && documentHash.length > 0);
+      const requiresDocumentUpdate = !!(
+        documentHash && documentHash.length > 0
+      );
 
       if (requiresDocumentUpdate) {
         documentHashBytes32 = ethers.hexlify(
@@ -505,23 +544,24 @@ export class BlockchainService {
         }
       } else {
         // Use zero bytes32 to indicate "keep existing"
-        documentHashBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
+        documentHashBytes32 =
+          '0x0000000000000000000000000000000000000000000000000000000000000000';
       }
 
       // Call updateLand function
-      const tx = await this.contract!.updateLand(
+      const tx = (await this.contract!.updateLand(
         landId,
         ipfsHash || '', // Empty string to keep existing
         documentHashBytes32,
         totalPrice || BigInt(0), // 0 to keep existing
-      );
+      )) as ethers.ContractTransactionResponse;
 
       this.logger.log(
         `Updating land ${landId} on blockchain. Transaction: ${tx.hash}`,
       );
 
       // Wait for transaction to be mined
-      const receipt = await tx.wait();
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
 
       if (!receipt || receipt.status !== 1) {
         return {
@@ -597,10 +637,11 @@ export class BlockchainService {
       );
 
       // Get token decimals
-      const decimals = await tokenContract.decimals();
+      const decimals = (await tokenContract.decimals()) as bigint;
       const amountWithDecimals = amount * BigInt(10 ** Number(decimals));
 
       // Check current allowance
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const currentAllowance = await tokenContract.allowance(
         userSigner.address,
         this.contractAddress,
@@ -617,13 +658,14 @@ export class BlockchainService {
       }
 
       // Approve tokens
-      const tx = await tokenContract.approve(
+      const tx = (await tokenContract.approve(
         this.contractAddress!,
         amountWithDecimals,
-      );
+      )) as ethers.ContractTransactionResponse;
 
+      const txHash = tx.hash;
       this.logger.log(
-        `Approving ${amountWithDecimals} tokens (${amount} with ${decimals} decimals) for user ${userSigner.address}. TX: ${tx.hash}`,
+        `Approving ${amountWithDecimals} tokens (${amount} with ${decimals} decimals) for user ${userSigner.address}. TX: ${txHash}`,
       );
 
       const receipt = await tx.wait();
@@ -635,11 +677,12 @@ export class BlockchainService {
         };
       }
 
-      this.logger.log(`Token approval successful. TX: ${tx.hash}`);
+      this.logger.log(`Token approval successful. TX: ${txHash}`);
 
       return {
         success: true,
-        transactionHash: tx.hash,
+
+        transactionHash: txHash,
       };
     } catch (error) {
       this.logger.error('Error approving tokens:', error);
@@ -689,6 +732,7 @@ export class BlockchainService {
         ERC20_ABI,
         this.provider,
       );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const decimals = await tokenContract.decimals();
       const amountWithDecimals = amount * BigInt(10 ** Number(decimals));
 
@@ -707,17 +751,17 @@ export class BlockchainService {
 
       // Call makePayment on contract (admin calls on behalf of buyer)
       // Note: Buyer must have approved tokens for the contract first
-      const tx = await this.contract!.makePayment(
+      const tx = (await this.contract!.makePayment(
         landId,
         userSigner.address,
         amountWithDecimals,
-      );
+      )) as ethers.ContractTransactionResponse;
 
       this.logger.log(
         `Making payment of ${amountWithDecimals} tokens (${amount} with ${decimals} decimals) for land ${landId} by user ${userSigner.address}. TX: ${tx.hash}`,
       );
 
-      const receipt = await tx.wait();
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
 
       if (!receipt || receipt.status !== 1) {
         return {
@@ -764,33 +808,56 @@ export class BlockchainService {
     }
 
     try {
-      // Note: The smart contract may need to be extended to store agreement hashes
-      // For now, we'll log and return success (actual implementation depends on contract)
-      // If contract has a function like: function storeAgreementHash(uint256 landId, bytes32 agreementHash, string memory ipfsHash)
-      // Uncomment and implement:
-      
       // Convert hash to bytes32
-      // const hashBytes32 = ethers.hexlify(
-      //   ethers.getBytes(agreementHash.startsWith('0x') ? agreementHash : `0x${agreementHash}`),
-      // );
-
-      // const tx = await this.contract!.storeAgreementHash(landId, hashBytes32, ipfsHash);
-      // const receipt = await tx.wait();
-
-      this.logger.log(
-        `Agreement hash logged for land ${landId}. Hash: ${agreementHash}, IPFS: ${ipfsHash}`,
+      const hashBytes32 = ethers.hexlify(
+        ethers.getBytes(
+          agreementHash.startsWith('0x') ? agreementHash : `0x${agreementHash}`,
+        ),
       );
 
-      // Return success for now (contract extension needed for actual storage)
+      // Ensure it's exactly 32 bytes (64 hex chars)
+      if (hashBytes32.length !== 66) {
+        // 0x + 64 chars = 66
+        return {
+          success: false,
+          error: 'Agreement hash must be 32 bytes (64 hex characters)',
+        };
+      }
+
+      // Call storeAgreementHash function on contract
+      const tx = (await this.contract!.storeAgreementHash(
+        landId,
+        hashBytes32,
+        ipfsHash,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Storing agreement hash on blockchain for land ${landId}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(
+        `Agreement hash stored successfully on blockchain. TX: ${tx.hash}`,
+      );
+
       return {
         success: true,
-        // transactionHash: tx.hash, // Uncomment when contract function is available
+        transactionHash: tx.hash,
       };
     } catch (error) {
       this.logger.error('Error storing agreement hash:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
       };
     }
   }
@@ -815,36 +882,45 @@ export class BlockchainService {
     }
 
     try {
-      // Similar to storeAgreementHash - contract may need extension
-      // For now, we can use updateLand to update the document hash
+      // Convert hash to bytes32
       const hashBytes32 = ethers.hexlify(
-        ethers.getBytes(documentHash.startsWith('0x') ? documentHash : `0x${documentHash}`),
+        ethers.getBytes(
+          documentHash.startsWith('0x') ? documentHash : `0x${documentHash}`,
+        ),
       );
 
-      // Get current land data first
-      const landData = await this.contract!.lands(landId);
-      const totalPrice = landData[4]; // totalPrice is 5th element (0-indexed)
+      // Ensure it's exactly 32 bytes (64 hex chars)
+      if (hashBytes32.length !== 66) {
+        // 0x + 64 chars = 66
+        return {
+          success: false,
+          error: 'Document hash must be 32 bytes (64 hex characters)',
+        };
+      }
 
-      // Update land with new ownership document hash
-      const tx = await this.contract!.updateLand(
+      // Call storeOwnershipDocumentHash function on contract
+      const tx = (await this.contract!.storeOwnershipDocumentHash(
         landId,
-        ipfsHash,
         hashBytes32,
-        totalPrice,
-      );
+        ipfsHash,
+      )) as ethers.ContractTransactionResponse;
 
       this.logger.log(
-        `Ownership document hash stored for land ${landId}. TX: ${tx.hash}`,
+        `Storing ownership document hash on blockchain for land ${landId}. Transaction: ${tx.hash}`,
       );
 
-      const receipt = await tx.wait();
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
 
       if (!receipt || receipt.status !== 1) {
         return {
           success: false,
-          error: 'Transaction failed',
+          error: 'Transaction failed or reverted',
         };
       }
+
+      this.logger.log(
+        `Ownership document hash stored successfully on blockchain. TX: ${tx.hash}`,
+      );
 
       return {
         success: true,
@@ -854,22 +930,22 @@ export class BlockchainService {
       this.logger.error('Error storing ownership document hash:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
       };
     }
   }
 
   /**
    * Transfer ownership on blockchain (after payment completion and approvals)
-   * Note: Actual ownership transfer happens via sellerApproveTransfer in smart contract
-   * This method can be used to check status or initiate the approval request
+   * Calls sellerApproveTransfer to complete ownership transfer on-chain
    * @param landId - Blockchain land ID
-   * @param newOwnerAddress - New owner's wallet address
+   * @param sellerAddress - Seller/builder address (must match land seller)
    * @returns Transaction result
    */
   async transferOwnership(
     landId: number,
-    newOwnerAddress: string,
+    sellerAddress: string,
   ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
     if (!this.isContractAvailable()) {
       return {
@@ -879,34 +955,68 @@ export class BlockchainService {
     }
 
     try {
-      // The smart contract handles ownership transfer through sellerApproveTransfer
-      // This method can check if transfer is ready or log the process
-      const landData = await this.contract!.lands(landId);
-      const currentOwner = landData[0]; // owner
-      const lockedTo = landData[5]; // lockedTo
+      // Get land data to verify seller matches
+      const landData = (await this.contract!.lands(landId)) as [
+        string,
+        string,
+        string,
+        string,
+        bigint,
+        string,
+      ];
+      const currentSeller = landData[1]; // seller
 
-      if (lockedTo.toLowerCase() !== newOwnerAddress.toLowerCase()) {
+      if (currentSeller.toLowerCase() !== sellerAddress.toLowerCase()) {
         return {
           success: false,
-          error: 'Property is not locked to this buyer',
+          error: 'Seller address does not match land seller',
         };
       }
 
-      // Check if payment is complete (would need to check amountPaid from contract)
-      // For now, just log - actual transfer happens via sellerApproveTransfer
+      // Check payment breakdown to verify payment is complete
+      const breakdown = (await this.contract!.getPaymentBreakdown(landId)) as {
+        remaining: bigint;
+      };
+      if (breakdown.remaining > 0) {
+        return {
+          success: false,
+          error: `Payment not complete. Remaining: ${breakdown.remaining}`,
+        };
+      }
+
+      // Call sellerApproveTransfer to complete ownership transfer
+      const tx = (await this.contract!.sellerApproveTransfer(
+        landId,
+        sellerAddress,
+      )) as ethers.ContractTransactionResponse;
+
       this.logger.log(
-        `Ownership transfer ready for land ${landId}. New owner: ${newOwnerAddress}`,
+        `Transferring ownership on blockchain for land ${landId}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(
+        `Ownership transferred successfully on blockchain. TX: ${tx.hash}`,
       );
 
       return {
         success: true,
-        // Actual transfer happens through sellerApproveTransfer function call
+        transactionHash: tx.hash,
       };
     } catch (error) {
-      this.logger.error('Error checking ownership transfer status:', error);
+      this.logger.error('Error transferring ownership:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
       };
     }
   }
@@ -929,27 +1039,43 @@ export class BlockchainService {
     }
 
     try {
-      // Note: Smart contract may need to be extended with builder registry
-      // For now, just log the builder registration
+      // Call registerBuilder function on contract
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const tx = await this.contract!.registerBuilder(
+        builderAddress,
+        licenseNumber,
+      );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const txHash = tx.hash as string;
       this.logger.log(
-        `Builder registration logged: ${builderAddress} (License: ${licenseNumber})`,
+        `Registering builder on blockchain: ${builderAddress} (License: ${licenseNumber}). Transaction: ${txHash}`,
       );
 
-      // If contract has a function like: function registerBuilder(address builder, string memory licenseNumber)
-      // Uncomment and implement:
-      // const tx = await this.contract!.registerBuilder(builderAddress, licenseNumber);
-      // const receipt = await tx.wait();
-      // return { success: receipt.status === 1, transactionHash: tx.hash };
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const receipt = await tx.wait();
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(
+        `Builder registered successfully on blockchain. TX: ${txHash}`,
+      );
 
       return {
         success: true,
-        // transactionHash: tx.hash, // Uncomment when contract function is available
+        transactionHash: txHash,
       };
     } catch (error) {
       this.logger.error('Error registering builder:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
       };
     }
   }
@@ -988,12 +1114,17 @@ export class BlockchainService {
     }
 
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const breakdown = await this.contract!.getPaymentBreakdown(landId);
       return {
-        totalPaid: breakdown[0],
-        cryptoPaid: breakdown[1],
-        bankPaid: breakdown[2],
-        remaining: breakdown[3],
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        totalPaid: breakdown[0] as bigint,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        cryptoPaid: breakdown[1] as bigint,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        bankPaid: breakdown[2] as bigint,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        remaining: breakdown[3] as bigint,
       };
     } catch (error) {
       this.logger.error(
@@ -1018,13 +1149,15 @@ export class BlockchainService {
     }
 
     try {
-      const tx = await this.contract!.adminUnlockLand(landId);
+      const tx = (await this.contract!.adminUnlockLand(
+        landId,
+      )) as ethers.ContractTransactionResponse;
 
       this.logger.log(
         `Unlocking land ${landId} on blockchain. Transaction: ${tx.hash}`,
       );
 
-      const receipt = await tx.wait();
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
 
       if (!receipt || receipt.status !== 1) {
         return {

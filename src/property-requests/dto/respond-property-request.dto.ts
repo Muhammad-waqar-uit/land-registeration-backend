@@ -22,4 +22,3 @@ export class RespondPropertyRequestDto {
   @IsString()
   builderResponse?: string;
 }
-

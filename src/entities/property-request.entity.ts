@@ -59,4 +59,3 @@ export class PropertyRequest {
   @JoinColumn({ name: 'buyerId' })
   buyer: User;
 }
-

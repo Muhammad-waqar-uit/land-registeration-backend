@@ -67,4 +67,3 @@ export class ResaleRequest {
   @JoinColumn({ name: 'builderId' })
   builder: User; // Original builder
 }
-

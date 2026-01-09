@@ -10,8 +10,10 @@ export class WalletService {
 
   constructor(private configService: ConfigService) {
     // Get master mnemonic from environment or generate one
-    const envMnemonic = this.configService.get<string>('MASTER_WALLET_MNEMONIC');
-    
+    const envMnemonic = this.configService.get<string>(
+      'MASTER_WALLET_MNEMONIC',
+    );
+
     if (envMnemonic) {
       this.masterMnemonic = envMnemonic;
     } else {
@@ -54,7 +56,7 @@ export class WalletService {
       // Derive wallet using BIP44 path: m/44'/60'/0'/0/{index}
       // 44' = BIP44, 60' = Ethereum, 0' = account, 0 = change, {index} = address index
       const derivationPath = `m/44'/60'/0'/0/${userIdIndex}`;
-      
+
       // Derive step by step from master wallet
       // First derive to the account level: m/44'/60'/0'
       const accountWallet = this.masterWallet.derivePath(`44'/60'/0'`);
@@ -64,14 +66,19 @@ export class WalletService {
       const derivedWallet = changeWallet.derivePath(userIdIndex.toString());
       const address = derivedWallet.address;
 
-      this.logger.log(`Generated wallet for user index ${userIdIndex}: ${address}`);
+      this.logger.log(
+        `Generated wallet for user index ${userIdIndex}: ${address}`,
+      );
 
       return {
         address,
         derivationPath,
       };
     } catch (error) {
-      this.logger.error(`Failed to generate wallet for user ${userIdIndex}:`, error);
+      this.logger.error(
+        `Failed to generate wallet for user ${userIdIndex}:`,
+        error,
+      );
       throw new Error('Failed to generate user wallet');
     }
   }
@@ -111,12 +118,16 @@ export class WalletService {
     if (!mnemonic) {
       throw new Error('Failed to generate mnemonic');
     }
-    
+
     this.logger.warn('⚠️  NEW MASTER MNEMONIC GENERATED');
-    this.logger.warn('⚠️  Store this mnemonic securely in your .env file as MASTER_WALLET_MNEMONIC');
+    this.logger.warn(
+      '⚠️  Store this mnemonic securely in your .env file as MASTER_WALLET_MNEMONIC',
+    );
     this.logger.warn(`⚠️  Mnemonic: ${mnemonic}`);
-    this.logger.warn('⚠️  If you lose this mnemonic, you cannot recover user wallets!');
-    
+    this.logger.warn(
+      '⚠️  If you lose this mnemonic, you cannot recover user wallets!',
+    );
+
     return mnemonic;
   }
 
@@ -135,7 +146,7 @@ export class WalletService {
    * Get private key from user ID
    * @param userId - User ID (UUID)
    * @returns Private key (for signing transactions)
-   * 
+   *
    * @dev SECURITY WARNING:
    *      - Private keys should be handled securely
    *      - Only use for backend-managed transactions
@@ -174,18 +185,15 @@ export class WalletService {
    * @param walletAddress - User's wallet address
    * @param userId - User ID (required to derive private key)
    * @returns Private key
-   * 
+   *
    * @dev NOTE: This method requires userId because we need to know the derivation path.
    *      If you only have the address, you'll need to look up the userId first.
    */
-  getPrivateKeyFromAddress(
-    walletAddress: string,
-    userId: string,
-  ): string {
+  getPrivateKeyFromAddress(walletAddress: string, userId: string): string {
     // First verify the address matches
     const privateKey = this.getPrivateKeyFromUserId(userId);
     const derivedWallet = new ethers.Wallet(privateKey);
-    
+
     if (derivedWallet.address.toLowerCase() !== walletAddress.toLowerCase()) {
       throw new Error(
         `Wallet address mismatch. Expected ${walletAddress}, got ${derivedWallet.address}`,

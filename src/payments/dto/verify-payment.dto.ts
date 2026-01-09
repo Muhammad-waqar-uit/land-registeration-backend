@@ -6,7 +6,11 @@ export class VerifyPaymentDto {
   @IsBoolean()
   verified: boolean;
 
-  @ApiProperty({ description: 'Remarks/notes', example: 'Payment verified successfully', required: false })
+  @ApiProperty({
+    description: 'Remarks/notes',
+    example: 'Payment verified successfully',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   remarks?: string;

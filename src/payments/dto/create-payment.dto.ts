@@ -33,7 +33,11 @@ export class CreatePaymentDto {
   @IsUUID()
   installmentId?: string;
 
-  @ApiProperty({ description: 'Payment amount', example: 50000.0, minimum: 0.01 })
+  @ApiProperty({
+    description: 'Payment amount',
+    example: 50000.0,
+    minimum: 0.01,
+  })
   @IsNumber()
   @Min(0.01)
   amount: number;
@@ -47,11 +51,18 @@ export class CreatePaymentDto {
   @IsDateString()
   dueDate?: string;
 
-  @ApiProperty({ description: 'Payment mode', enum: PaymentMode, example: PaymentMode.BANK })
+  @ApiProperty({
+    description: 'Payment mode',
+    enum: PaymentMode,
+    example: PaymentMode.BANK,
+  })
   @IsEnum(PaymentMode)
   paymentMode: PaymentMode;
 
-  @ApiProperty({ description: 'Transaction hash (for crypto payments)', required: false })
+  @ApiProperty({
+    description: 'Transaction hash (for crypto payments)',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   transactionHash?: string;

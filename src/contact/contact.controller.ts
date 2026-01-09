@@ -1,10 +1,5 @@
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBody,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { ContactService } from './contact.service';
 import { ContactDto } from './dto/contact.dto';
 import { ContactResponseDto } from './dto/contact-response.dto';
@@ -45,7 +40,9 @@ export class ContactController {
     status: 500,
     description: 'Failed to send email',
   })
-  async submitContactForm(@Body() contactDto: ContactDto): Promise<ContactResponseDto> {
+  async submitContactForm(
+    @Body() contactDto: ContactDto,
+  ): Promise<ContactResponseDto> {
     return this.contactService.submitContactForm(contactDto);
   }
 }

@@ -8,13 +8,9 @@ import { Land } from '../entities/land.entity';
 import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Project, User, Land]),
-    CommonModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Project, User, Land]), CommonModule],
   controllers: [ProjectsController],
   providers: [ProjectsService],
   exports: [ProjectsService],
 })
 export class ProjectsModule {}
-

@@ -19,4 +19,3 @@ export class VerifyBuilderDto {
   @IsString()
   remarks?: string;
 }
-

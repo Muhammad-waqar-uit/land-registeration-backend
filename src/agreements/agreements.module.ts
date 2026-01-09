@@ -18,4 +18,3 @@ import { CommonModule } from '../common/common.module';
   exports: [AgreementsService],
 })
 export class AgreementsModule {}
-

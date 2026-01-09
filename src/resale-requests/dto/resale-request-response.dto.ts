@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ResaleRequest, ResaleRequestStatus } from '../../entities/resale-request.entity';
+import {
+  ResaleRequest,
+  ResaleRequestStatus,
+} from '../../entities/resale-request.entity';
 
 export class ResaleRequestResponseDto {
   @ApiProperty({ description: 'Resale Request ID' })
@@ -20,10 +23,18 @@ export class ResaleRequestResponseDto {
   @ApiProperty({ enum: ResaleRequestStatus, description: 'Request status' })
   status: ResaleRequestStatus;
 
-  @ApiProperty({ description: 'Approval timestamp', required: false, nullable: true })
+  @ApiProperty({
+    description: 'Approval timestamp',
+    required: false,
+    nullable: true,
+  })
   approvedAt: Date | null;
 
-  @ApiProperty({ description: 'Listing timestamp', required: false, nullable: true })
+  @ApiProperty({
+    description: 'Listing timestamp',
+    required: false,
+    nullable: true,
+  })
   listedAt: Date | null;
 
   @ApiProperty({ description: 'Created at' })
@@ -47,4 +58,3 @@ export class ResaleRequestResponseDto {
     };
   }
 }
-

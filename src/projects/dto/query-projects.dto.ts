@@ -53,4 +53,3 @@ export class QueryProjectsDto {
   @Type(() => Number)
   limit?: number = 10;
 }
-

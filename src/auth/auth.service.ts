@@ -9,6 +9,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+import * as jwt from 'jsonwebtoken';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -19,9 +20,9 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto, UserResponseDto } from './dto/auth-response.dto';
 import { RefreshTokenResponseDto } from './dto/refresh-token.dto';
-import { jwtConfig } from '../config/jwt.config';
 import { EmailService } from '../common/services/email.service';
 import { WalletService } from '../common/services/wallet.service';
+import { BlockchainService } from '../common/services/blockchain.service';
 
 @Injectable()
 export class AuthService {
@@ -38,10 +39,12 @@ export class AuthService {
     private configService: ConfigService,
     private emailService: EmailService,
     private walletService: WalletService,
+    private blockchainService: BlockchainService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    const { email, password, companyName, licenseNumber, ...userData } = registerDto;
+    const { email, password, companyName, licenseNumber, ...userData } =
+      registerDto;
 
     // Check if user already exists
     const existingUser = await this.userRepository.findOne({
@@ -80,7 +83,8 @@ export class AuthService {
       password: hashedPassword,
       // Builder-specific fields
       companyName: registerDto.role === UserRole.BUILDER ? companyName : null,
-      licenseNumber: registerDto.role === UserRole.BUILDER ? licenseNumber : null,
+      licenseNumber:
+        registerDto.role === UserRole.BUILDER ? licenseNumber : null,
       // Builder is not verified by default
       isBuilderVerified: false,
     });
@@ -89,15 +93,19 @@ export class AuthService {
 
     // Generate wallet address for user
     try {
-      const { address } = this.walletService.generateWalletFromUserId(savedUser.id);
-      
+      const { address } = this.walletService.generateWalletFromUserId(
+        savedUser.id,
+      );
+
       // Check if address already exists (shouldn't happen, but safety check)
       const existingUser = await this.userRepository.findOne({
         where: { walletAddress: address },
       });
 
       if (existingUser) {
-        this.logger.warn(`Wallet address ${address} already exists, generating new one...`);
+        this.logger.warn(
+          `Wallet address ${address} already exists, generating new one...`,
+        );
         // Retry with a slight modification (shouldn't happen in practice)
         throw new Error('Wallet address collision');
       }
@@ -117,10 +125,13 @@ export class AuthService {
         refreshToken,
       };
     } catch (error) {
-      this.logger.error(`Failed to generate wallet for user ${savedUser.id}:`, error);
+      this.logger.error(
+        `Failed to generate wallet for user ${savedUser.id}:`,
+        error,
+      );
       // Continue without wallet - user can still be created
       // User can generate wallet later using /auth/wallet/generate endpoint
-      
+
       // Generate tokens
       const accessToken = this.generateAccessToken(savedUser);
       const refreshToken = await this.generateRefreshToken(savedUser.id);
@@ -159,34 +170,45 @@ export class AuthService {
     // Generate wallet if user doesn't have one (for old accounts)
     if (!user.walletAddress) {
       try {
-        const { address } = this.walletService.generateWalletFromUserId(user.id);
-        
+        const { address } = this.walletService.generateWalletFromUserId(
+          user.id,
+        );
+
         // Check if address already exists
         const existingUser = await this.userRepository.findOne({
           where: { walletAddress: address },
         });
 
         if (existingUser && existingUser.id !== user.id) {
-          this.logger.warn(`Wallet address ${address} already exists for another user`);
+          this.logger.warn(
+            `Wallet address ${address} already exists for another user`,
+          );
           // Continue without wallet - user can generate later
         } else {
           user.walletAddress = address;
           const userWithWallet = await this.userRepository.save(user);
-          this.logger.log(`Generated wallet ${address} for existing user ${user.id} on login`);
-          
-        // Generate tokens
-        const accessToken = this.generateAccessToken(userWithWallet);
-        const refreshToken = await this.generateRefreshToken(userWithWallet.id);
+          this.logger.log(
+            `Generated wallet ${address} for existing user ${user.id} on login`,
+          );
 
-        return {
-          user: UserResponseDto.fromEntity(userWithWallet),
-          token: accessToken, // Backward compatibility
-          accessToken,
-          refreshToken,
-        };
+          // Generate tokens
+          const accessToken = this.generateAccessToken(userWithWallet);
+          const refreshToken = await this.generateRefreshToken(
+            userWithWallet.id,
+          );
+
+          return {
+            user: UserResponseDto.fromEntity(userWithWallet),
+            token: accessToken, // Backward compatibility
+            accessToken,
+            refreshToken,
+          };
         }
       } catch (error) {
-        this.logger.error(`Failed to generate wallet for user ${user.id} on login:`, error);
+        this.logger.error(
+          `Failed to generate wallet for user ${user.id} on login:`,
+          error,
+        );
         // Continue without wallet - user can still login
         // User can generate wallet later using /auth/wallet/generate endpoint
       }
@@ -216,12 +238,19 @@ export class AuthService {
     // Generate wallet if missing
     if (!user.walletAddress) {
       try {
-        const { address } = this.walletService.generateWalletFromUserId(user.id);
+        const { address } = this.walletService.generateWalletFromUserId(
+          user.id,
+        );
         user.walletAddress = address;
         await this.userRepository.save(user);
-        this.logger.log(`Generated wallet ${address} for user ${user.id} on getCurrentUser`);
+        this.logger.log(
+          `Generated wallet ${address} for user ${user.id} on getCurrentUser`,
+        );
       } catch (error) {
-        this.logger.error(`Failed to generate wallet for user ${user.id}:`, error);
+        this.logger.error(
+          `Failed to generate wallet for user ${user.id}:`,
+          error,
+        );
         // Continue without wallet
       }
     }
@@ -232,7 +261,15 @@ export class AuthService {
   async generateWallet(userId: string): Promise<UserResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      select: ['id', 'name', 'email', 'role', 'walletAddress', 'createdAt', 'updatedAt'],
+      select: [
+        'id',
+        'name',
+        'email',
+        'role',
+        'walletAddress',
+        'createdAt',
+        'updatedAt',
+      ],
     });
 
     if (!user) {
@@ -242,14 +279,16 @@ export class AuthService {
     // Generate wallet address
     try {
       const { address } = this.walletService.generateWalletFromUserId(user.id);
-      
+
       // Check if address already exists for another user
       const existingUser = await this.userRepository.findOne({
         where: { walletAddress: address },
       });
 
       if (existingUser && existingUser.id !== userId) {
-        throw new ConflictException('Wallet address already assigned to another user');
+        throw new ConflictException(
+          'Wallet address already assigned to another user',
+        );
       }
 
       user.walletAddress = address;
@@ -262,7 +301,9 @@ export class AuthService {
       if (error instanceof ConflictException) {
         throw error;
       }
-      throw new BadRequestException('Failed to generate wallet address. Please try again.');
+      throw new BadRequestException(
+        'Failed to generate wallet address. Please try again.',
+      );
     }
   }
 
@@ -316,7 +357,8 @@ export class AuthService {
 
     // Update user fields
     if (updateProfileDto.name !== undefined) user.name = updateProfileDto.name;
-    if (updateProfileDto.email !== undefined) user.email = updateProfileDto.email;
+    if (updateProfileDto.email !== undefined)
+      user.email = updateProfileDto.email;
     if (updateProfileDto.cnic !== undefined) user.cnic = updateProfileDto.cnic;
     if (updateProfileDto.fatherName !== undefined)
       user.fatherName = updateProfileDto.fatherName;
@@ -353,7 +395,10 @@ export class AuthService {
     }
 
     // Verify current password
-    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Current password is incorrect');
@@ -371,7 +416,9 @@ export class AuthService {
     };
   }
 
-  async forgotPassword(email: string): Promise<{ message: string; resetToken?: string }> {
+  async forgotPassword(
+    email: string,
+  ): Promise<{ message: string; resetToken?: string }> {
     const user = await this.userRepository.findOne({
       where: { email },
     });
@@ -391,7 +438,10 @@ export class AuthService {
 
     // Generate reset token
     const rawToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
 
     // Set expiry to 1 hour from now
     const expiresAt = new Date();
@@ -411,14 +461,18 @@ export class AuthService {
     try {
       await this.emailService.sendPasswordResetEmail(email, rawToken);
       return {
-        message: 'If the email exists, a password reset link has been sent to your email.',
+        message:
+          'If the email exists, a password reset link has been sent to your email.',
       };
     } catch (error) {
       // In development, return token if email service not configured
       if (this.configService.get<string>('NODE_ENV') === 'development') {
-        this.logger.warn('Email service not configured. Returning token in response (DEV ONLY).');
+        this.logger.warn(
+          'Email service not configured. Returning token in response (DEV ONLY).',
+        );
         return {
-          message: 'Password reset token generated. Check your email for reset link.',
+          message:
+            'Password reset token generated. Check your email for reset link.',
           resetToken: rawToken, // ⚠️ DEV ONLY - Remove in production!
         };
       }
@@ -426,7 +480,10 @@ export class AuthService {
     }
   }
 
-  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
     // Hash the provided token to match stored hash
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
@@ -505,7 +562,10 @@ export class AuthService {
 
   async refreshToken(refreshToken: string): Promise<RefreshTokenResponseDto> {
     // Hash the provided token to match stored hash
-    const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
 
     // Find token in database
     const tokenRecord = await this.refreshTokenRepository.findOne({
@@ -538,8 +598,9 @@ export class AuthService {
     const accessToken = this.generateAccessToken(user);
 
     // Optionally rotate refresh token (for better security)
-    const rotateRefreshToken = this.configService.get<string>('REFRESH_TOKEN_ROTATION') !== 'false';
-    
+    const rotateRefreshToken =
+      this.configService.get<string>('REFRESH_TOKEN_ROTATION') !== 'false';
+
     if (rotateRefreshToken) {
       // Revoke old token
       tokenRecord.revoked = true;
@@ -560,7 +621,10 @@ export class AuthService {
   }
 
   async revokeRefreshToken(refreshToken: string): Promise<void> {
-    const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
 
     const tokenRecord = await this.refreshTokenRepository.findOne({
       where: { token: hashedToken },
@@ -588,19 +652,25 @@ export class AuthService {
 
     // Access token expires in 15 minutes to 1 hour (short-lived)
     const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '1h';
-    
+
     return this.jwtService.sign(payload, {
-      expiresIn: expiresIn as any,
+      expiresIn: expiresIn as jwt.SignOptions['expiresIn'],
     });
   }
 
   private async generateRefreshToken(userId: string): Promise<string> {
     // Generate random token
     const rawToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
 
     // Set expiry to 7-30 days (long-lived)
-    const expiresInDays = parseInt(this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN_DAYS') || '7', 10);
+    const expiresInDays = parseInt(
+      this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN_DAYS') || '7',
+      10,
+    );
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
@@ -654,6 +724,34 @@ export class AuthService {
 
     const verifiedBuilder = await this.userRepository.save(builder);
     this.logger.log(`Builder ${builderId} verified by admin ${adminId}`);
+
+    // Register builder on blockchain if wallet address exists and contract is available
+    if (
+      verifiedBuilder.walletAddress &&
+      this.blockchainService.isContractAvailable()
+    ) {
+      try {
+        if (verifiedBuilder.licenseNumber) {
+          const blockchainResult = await this.blockchainService.registerBuilder(
+            verifiedBuilder.walletAddress,
+            verifiedBuilder.licenseNumber,
+          );
+
+          if (blockchainResult.success) {
+            this.logger.log(
+              `Builder ${builderId} registered on blockchain. TX: ${blockchainResult.transactionHash || 'N/A'}`,
+            );
+          } else {
+            this.logger.warn(
+              `Failed to register builder on blockchain: ${blockchainResult.error}`,
+            );
+          }
+        }
+      } catch (error) {
+        this.logger.error(`Error registering builder on blockchain: ${error}`);
+        // Don't fail builder verification if blockchain registration fails
+      }
+    }
 
     return UserResponseDto.fromEntity(verifiedBuilder);
   }

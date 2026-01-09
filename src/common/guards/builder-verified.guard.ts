@@ -4,24 +4,11 @@ import {
   ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { ROLES_KEY } from '../decorators/roles.decorator';
 import { User, UserRole } from '../../entities/user.entity';
 
 @Injectable()
-export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
-
+export class BuilderVerifiedGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(
-      ROLES_KEY,
-      [context.getHandler(), context.getClass()],
-    );
-
-    if (!requiredRoles || requiredRoles.length === 0) {
-      return true;
-    }
-
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const request = context.switchToHttp().getRequest();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -31,11 +18,13 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Authentication required');
     }
 
-    const hasRole = requiredRoles.some((role) => user.role === role);
+    if (user.role !== UserRole.BUILDER) {
+      throw new ForbiddenException('Only builders can access this resource');
+    }
 
-    if (!hasRole) {
+    if (!user.isBuilderVerified) {
       throw new ForbiddenException(
-        `Access denied. Required roles: ${requiredRoles.join(', ')}`,
+        'Builder account must be verified by an admin before performing this action',
       );
     }
 

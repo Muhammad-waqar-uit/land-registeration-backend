@@ -11,7 +11,11 @@ export class UserResponseDto {
   @ApiProperty({ description: 'User email', example: 'john@example.com' })
   email: string;
 
-  @ApiProperty({ description: 'User role', enum: UserRole, example: UserRole.USER })
+  @ApiProperty({
+    description: 'User role',
+    enum: UserRole,
+    example: UserRole.USER,
+  })
   role: UserRole;
 
   @ApiProperty({
@@ -28,7 +32,8 @@ export class UserResponseDto {
   updatedAt: Date;
 
   static fromEntity(user: User): UserResponseDto {
-    const { password, ...userResponse } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...userResponse } = user;
     return userResponse;
   }
 }
@@ -37,12 +42,21 @@ export class AuthResponseDto {
   @ApiProperty({ description: 'User information', type: UserResponseDto })
   user: UserResponseDto;
 
-  @ApiProperty({ description: 'JWT access token', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  @ApiProperty({
+    description: 'JWT access token',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
   token: string;
 
-  @ApiProperty({ description: 'JWT access token (alias for token)', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  @ApiProperty({
+    description: 'JWT access token (alias for token)',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
   accessToken: string;
 
-  @ApiProperty({ description: 'Refresh token for getting new access tokens', example: 'refresh-token-abc123xyz...' })
+  @ApiProperty({
+    description: 'Refresh token for getting new access tokens',
+    example: 'refresh-token-abc123xyz...',
+  })
   refreshToken: string;
 }

@@ -1,7 +1,10 @@
 import { IsOptional, IsEnum, IsUUID, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-import { AgreementType, AgreementStatus } from '../../entities/agreement.entity';
+import {
+  AgreementType,
+  AgreementStatus,
+} from '../../entities/agreement.entity';
 
 export class QueryAgreementsDto {
   @ApiProperty({
@@ -75,4 +78,3 @@ export class QueryAgreementsDto {
   @Min(1)
   limit?: number = 10;
 }
-

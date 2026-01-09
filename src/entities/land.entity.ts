@@ -10,7 +10,6 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Payment } from './payment.entity';
-import { Reservation } from './reservation.entity';
 import { Project } from './project.entity';
 import { Installment } from './installment.entity';
 
@@ -144,9 +143,6 @@ export class Land {
 
   @OneToMany(() => Payment, (payment) => payment.land)
   payments: Payment[];
-
-  @OneToMany(() => Reservation, (reservation) => reservation.land)
-  reservations: Reservation[];
 
   @ManyToOne(() => Project, (project) => project.lands, { nullable: true })
   @JoinColumn({ name: 'projectId' })

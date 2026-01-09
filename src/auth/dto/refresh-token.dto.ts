@@ -12,10 +12,16 @@ export class RefreshTokenDto {
 }
 
 export class RefreshTokenResponseDto {
-  @ApiProperty({ description: 'New JWT access token', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  @ApiProperty({
+    description: 'New JWT access token',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
   accessToken: string;
 
-  @ApiProperty({ description: 'New refresh token (if token rotation is enabled)', example: 'refresh-token-abc123xyz...', required: false })
+  @ApiProperty({
+    description: 'New refresh token (if token rotation is enabled)',
+    example: 'refresh-token-abc123xyz...',
+    required: false,
+  })
   refreshToken?: string;
 }
-

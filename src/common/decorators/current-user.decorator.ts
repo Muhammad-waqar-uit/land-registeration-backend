@@ -3,7 +3,9 @@ import { User } from '../../entities/user.entity';
 
 export const CurrentUser = createParamDecorator(
   (data: unknown, ctx: ExecutionContext): User => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const request = ctx.switchToHttp().getRequest();
-    return request.user;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return request.user as User;
   },
 );

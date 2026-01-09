@@ -7,12 +7,10 @@ import {
   Param,
   Delete,
   UseGuards,
-  UploadedFile,
   UploadedFiles,
   UseInterceptors,
   Query,
   ParseUUIDPipe,
-  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -21,7 +19,6 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiBody,
-  ApiQuery,
 } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { LandsService } from './lands.service';
@@ -44,7 +41,9 @@ export class LandsController {
   constructor(private readonly landsService: LandsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List properties (with filters: project, builder, status, etc.)' })
+  @ApiOperation({
+    summary: 'List properties (with filters: project, builder, status, etc.)',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of properties',
@@ -103,7 +102,10 @@ export class LandsController {
     description: 'Land successfully created',
     type: LandResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Builder only, must be verified' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Builder only, must be verified',
+  })
   create(
     @Body() createLandDto: CreateLandDto,
     @UploadedFiles()
@@ -247,9 +249,7 @@ export class LandsController {
     },
   })
   @ApiResponse({ status: 404, description: 'Land not found' })
-  async verifyBlockchain(
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  async verifyBlockchain(@Param('id', ParseUUIDPipe) id: string) {
     return this.landsService.verifyBlockchainHash(id);
   }
 }

@@ -1,9 +1,4 @@
-import {
-  IsString,
-  IsOptional,
-  IsNotEmpty,
-  MaxLength,
-} from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateProjectDto {
@@ -54,4 +49,3 @@ export class CreateProjectDto {
   @IsOptional()
   totalUnits?: number;
 }
-

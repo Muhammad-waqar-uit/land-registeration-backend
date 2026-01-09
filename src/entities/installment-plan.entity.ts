@@ -29,14 +29,16 @@ export class InstallmentPlan {
   // Optional payment milestones (stored as JSON)
   // Example: [{ milestone: "25%", amount: 250000, dueDate: null }, ...]
   @Column({ type: 'jsonb', nullable: true })
-  milestones: {
-    milestone?: string; // e.g., "25%", "50%", "Final Payment"
-    percentage?: number; // Percentage of total amount
-    amount?: number; // Specific amount
-    description?: string; // Description of milestone
-    suggestedDueDate?: string; // Suggested date (not enforced in timeline-based system)
-    [key: string]: any;
-  }[] | null;
+  milestones:
+    | {
+        milestone?: string; // e.g., "25%", "50%", "Final Payment"
+        percentage?: number; // Percentage of total amount
+        amount?: number; // Specific amount
+        description?: string; // Description of milestone
+        suggestedDueDate?: string; // Suggested date (not enforced in timeline-based system)
+        [key: string]: any;
+      }[]
+    | null;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -49,4 +51,3 @@ export class InstallmentPlan {
   @JoinColumn({ name: 'builderId' })
   builder: User;
 }
-

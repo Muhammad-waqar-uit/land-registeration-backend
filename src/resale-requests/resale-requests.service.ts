@@ -151,7 +151,8 @@ export class ResaleRequestsService {
 
     // Update request
     request.status = respondDto.status;
-    request.approvedAt = respondDto.status === ResaleRequestStatus.APPROVED ? new Date() : null;
+    request.approvedAt =
+      respondDto.status === ResaleRequestStatus.APPROVED ? new Date() : null;
 
     const savedRequest = await this.resaleRequestRepository.save(request);
 
@@ -231,10 +232,7 @@ export class ResaleRequestsService {
     }
 
     // Verify authorization (builder or admin)
-    if (
-      userRole !== UserRole.ADMIN &&
-      request.builderId !== userId
-    ) {
+    if (userRole !== UserRole.ADMIN && request.builderId !== userId) {
       throw new ForbiddenException(
         'You are not authorized to mark this property as sold',
       );
@@ -357,9 +355,7 @@ export class ResaleRequestsService {
   /**
    * Find all resale requests with filters (admin or general query)
    */
-  async findAll(
-    query: QueryResaleRequestsDto,
-  ): Promise<{
+  async findAll(query: QueryResaleRequestsDto): Promise<{
     data: ResaleRequestResponseDto[];
     total: number;
     page: number;
@@ -429,4 +425,3 @@ export class ResaleRequestsService {
     return ResaleRequestResponseDto.fromEntity(request);
   }
 }
-
