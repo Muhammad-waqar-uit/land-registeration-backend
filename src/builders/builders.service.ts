@@ -138,15 +138,23 @@ export class BuildersService {
    * Get builder profile by ID
    */
   async findOne(builderId: string): Promise<BuilderResponseDto> {
-    const builder = await this.userRepository.findOne({
-      where: { id: builderId, role: UserRole.BUILDER },
+    // First find the user by ID
+    const user = await this.userRepository.findOne({
+      where: { id: builderId },
     });
 
-    if (!builder) {
-      throw new NotFoundException('Builder not found');
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    return BuilderResponseDto.fromEntity(builder);
+    // Verify they have builder role
+    if (user.role !== UserRole.BUILDER) {
+      throw new BadRequestException(
+        'User is not a builder. Please register as a builder first.',
+      );
+    }
+
+    return BuilderResponseDto.fromEntity(user);
   }
 
   /**
@@ -171,16 +179,26 @@ export class BuildersService {
       phoneNumber?: string;
     },
   ): Promise<BuilderResponseDto> {
-    const builder = await this.userRepository.findOne({
-      where: { id: builderId, role: UserRole.BUILDER },
+    // First find the user by ID
+    const user = await this.userRepository.findOne({
+      where: { id: builderId },
     });
 
-    if (!builder) {
-      throw new NotFoundException('Builder not found');
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
+    // Verify they have builder role
+    if (user.role !== UserRole.BUILDER) {
+      throw new BadRequestException(
+        'User does not have builder role. Please register as a builder first.',
+      );
+    }
+
+    const builder = user;
+
     // Check if email is being updated and if it's already taken
-    if (updateData.email && updateData.email !== builder.email) {
+    if (updateData.email && builder.email && updateData.email !== builder.email) {
       const existingUser = await this.userRepository.findOne({
         where: { email: updateData.email },
       });

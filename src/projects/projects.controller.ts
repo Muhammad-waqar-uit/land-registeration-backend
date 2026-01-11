@@ -11,7 +11,10 @@ import {
   UseInterceptors,
   Query,
   ParseUUIDPipe,
+  Logger,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -37,13 +40,15 @@ import { User, UserRole } from '../entities/user.entity';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
 export class ProjectsController {
+  private readonly logger = new Logger(ProjectsController.name);
+
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Post()
   @Roles(UserRole.BUILDER)
   @UseInterceptors(FileInterceptor('approvalDocuments'))
   @ApiConsumes('multipart/form-data', 'application/json')
-  @ApiOperation({ summary: 'Create a new project (Builder only)' })
+  @ApiOperation({ summary: 'Create a new project (Builder only) ✅' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -89,7 +94,7 @@ export class ProjectsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all projects with optional filters' })
+  @ApiOperation({ summary: 'List all projects with optional filters ✅' })
   @ApiResponse({
     status: 200,
     description: 'List of projects',
@@ -100,7 +105,7 @@ export class ProjectsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get project by ID' })
+  @ApiOperation({ summary: 'Get project by ID ✅' })
   @ApiResponse({
     status: 200,
     description: 'Project details',
@@ -114,7 +119,7 @@ export class ProjectsController {
   }
 
   @Get(':id/properties')
-  @ApiOperation({ summary: 'Get all properties in project' })
+  @ApiOperation({ summary: 'Get all properties in project ✅' })
   @ApiResponse({
     status: 200,
     description: 'List of properties in the project',
@@ -127,7 +132,22 @@ export class ProjectsController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update project (Owner or Admin)' })
+  @ApiConsumes('application/json', 'multipart/form-data')
+  @ApiOperation({ summary: 'Update project (Owner or Admin) ✅' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', example: 'Updated Project Name' },
+        location: { type: 'string', example: 'Updated Location' },
+        description: { type: 'string', example: 'Updated description' },
+        locationDetails: { type: 'string', example: 'Updated location details' },
+        totalUnits: { type: 'number', example: 50 },
+        status: { type: 'string', enum: ['draft', 'active', 'completed', 'cancelled'] },
+      },
+    },
+    description: 'Project update data (supports both JSON and FormData)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Project updated',
@@ -138,17 +158,71 @@ export class ProjectsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateProjectDto: UpdateProjectDto,
     @CurrentUser() user: User,
+    @Req() request: Request,
   ): Promise<ProjectResponseDto> {
-    return this.projectsService.update(
-      id,
-      updateProjectDto,
-      user.id,
-      user.role,
+    // Log raw request body from Express
+    this.logger.debug(
+      `[CONTROLLER] Raw Express request body: ${JSON.stringify(request.body)}`,
     );
+    this.logger.debug(
+      `[CONTROLLER] Content-Type: ${request.headers['content-type']}`,
+    );
+    
+    this.logger.log(
+      `[CONTROLLER] Update request received for project ${id} from user ${user.id} (${user.email})`,
+    );
+    this.logger.debug(
+      `[CONTROLLER] Transformed DTO: ${JSON.stringify(updateProjectDto)}`,
+    );
+    this.logger.debug(
+      `[CONTROLLER] Request body (detailed): ${JSON.stringify(
+        {
+          name: updateProjectDto.name,
+          nameType: typeof updateProjectDto.name,
+          nameExists: 'name' in updateProjectDto,
+          location: updateProjectDto.location,
+          locationType: typeof updateProjectDto.location,
+          locationExists: 'location' in updateProjectDto,
+          description: updateProjectDto.description,
+          descriptionType: typeof updateProjectDto.description,
+          descriptionExists: 'description' in updateProjectDto,
+          locationDetails: updateProjectDto.locationDetails,
+          locationDetailsType: typeof updateProjectDto.locationDetails,
+          locationDetailsExists: 'locationDetails' in updateProjectDto,
+          totalUnits: updateProjectDto.totalUnits,
+          totalUnitsType: typeof updateProjectDto.totalUnits,
+          totalUnitsExists: 'totalUnits' in updateProjectDto,
+          status: updateProjectDto.status,
+          statusType: typeof updateProjectDto.status,
+          statusExists: 'status' in updateProjectDto,
+        },
+        null,
+        2,
+      )}`,
+    );
+
+    try {
+      const result = await this.projectsService.update(
+        id,
+        updateProjectDto,
+        user.id,
+        user.role,
+      );
+      this.logger.log(
+        `[CONTROLLER] SUCCESS - Project ${id} updated successfully`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[CONTROLLER] FAILED - Error updating project ${id}: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete project (Owner or Admin)' })
+  @ApiOperation({ summary: 'Delete project (Owner or Admin) ✅' })
   @ApiResponse({ status: 200, description: 'Project deleted' })
   @ApiResponse({ status: 403, description: 'Permission denied' })
   async remove(
@@ -159,7 +233,7 @@ export class ProjectsController {
   }
 
   @Get(':id/verify')
-  @ApiOperation({ summary: 'Verify approval document integrity' })
+  @ApiOperation({ summary: 'Verify approval document integrity ✅' })
   @ApiResponse({
     status: 200,
     description: 'Verification result for approval document',
@@ -203,10 +277,10 @@ export class ProjectsController {
   @UseInterceptors(FileInterceptor('approvalDocuments'))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Upload project approval documents (Builder or Admin)',
+    summary: 'Upload project approval documents (Builder or Admin) ✅     ',
   })
   @ApiBody({
-    schema: {
+    schema: {   
       type: 'object',
       properties: {
         approvalDocuments: {

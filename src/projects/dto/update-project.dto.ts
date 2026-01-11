@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsEnum, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsEnum, MaxLength, IsNumber, IsInt, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import { ProjectStatus } from '../../entities/project.entity';
 
 export class UpdateProjectDto {
@@ -9,15 +10,23 @@ export class UpdateProjectDto {
     required: false,
     maxLength: 255,
   })
+  @Transform(({ value }) => {
+    if (value === null || value === undefined) return value;
+    return typeof value === 'string' ? value.trim() : String(value).trim();
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(255)
+  @IsString({ message: 'Project name must be a string' })
+  @MaxLength(255, { message: 'Project name must be shorter than or equal to 255 characters' })
   name?: string;
 
   @ApiProperty({
     description: 'Project description',
     example: 'Modern luxury apartments with world-class amenities',
     required: false,
+  })
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return undefined;
+    return typeof value === 'string' ? value.trim() : String(value).trim();
   })
   @IsOptional()
   @IsString()
@@ -29,15 +38,23 @@ export class UpdateProjectDto {
     required: false,
     maxLength: 255,
   })
+  @Transform(({ value }) => {
+    if (value === null || value === undefined) return value;
+    return typeof value === 'string' ? value.trim() : String(value).trim();
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(255)
+  @IsString({ message: 'Project location must be a string' })
+  @MaxLength(255, { message: 'Project location must be shorter than or equal to 255 characters' })
   location?: string;
 
   @ApiProperty({
     description: 'Detailed location information',
     example: 'Near Central Park, next to shopping mall',
     required: false,
+  })
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return undefined;
+    return typeof value === 'string' ? value.trim() : String(value).trim();
   })
   @IsOptional()
   @IsString()
@@ -53,10 +70,20 @@ export class UpdateProjectDto {
   status?: ProjectStatus;
 
   @ApiProperty({
-    description: 'Total number of units',
+    description: 'Total number of units in the project',
     example: 50,
     required: false,
+    default: 0,
+  })
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return undefined;
+    const num = typeof value === 'string' ? parseInt(value, 10) : Number(value);
+    return isNaN(num) ? undefined : num;
   })
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'Total units must be a number' })
+  @IsInt({ message: 'Total units must be an integer' })
+  @Min(0, { message: 'Total units must be greater than or equal to 0' })
   totalUnits?: number;
 }

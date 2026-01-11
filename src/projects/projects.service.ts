@@ -147,20 +147,37 @@ export class ProjectsService {
     userId: string,
     userRole: UserRole,
   ): Promise<ProjectResponseDto> {
+    this.logger.log(
+      `[UPDATE] Starting update for project ${id} by user ${userId} (role: ${userRole})`,
+    );
+    this.logger.debug(
+      `[UPDATE] Update data received: ${JSON.stringify(updateProjectDto)}`,
+    );
+
     const project = await this.projectRepository.findOne({
       where: { id },
     });
 
     if (!project) {
+      this.logger.warn(`[UPDATE] FAILED - Project ${id} not found`);
       throw new NotFoundException('Project not found');
     }
 
+    this.logger.log(
+      `[UPDATE] Project found: ${project.name} (status: ${project.status}, builderId: ${project.builderId})`,
+    );
+
     // Check permission
     if (project.builderId !== userId && userRole !== UserRole.ADMIN) {
+      this.logger.warn(
+        `[UPDATE] FAILED - Permission denied. User ${userId} (role: ${userRole}) cannot update project owned by ${project.builderId}`,
+      );
       throw new ForbiddenException(
         'You do not have permission to update this project',
       );
     }
+
+    this.logger.log(`[UPDATE] Permission check passed`);
 
     // Check if project can be updated (not completed or cancelled)
     if (userRole !== UserRole.ADMIN) {
@@ -168,16 +185,134 @@ export class ProjectsService {
         project.status === ProjectStatus.COMPLETED ||
         project.status === ProjectStatus.CANCELLED
       ) {
+        this.logger.warn(
+          `[UPDATE] FAILED - Cannot update project with status "${project.status}"`,
+        );
         throw new BadRequestException(
           `Cannot update project with status "${project.status}"`,
         );
       }
     }
 
-    Object.assign(project, updateProjectDto);
-    const updatedProject = await this.projectRepository.save(project);
+    this.logger.log(`[UPDATE] Status check passed`);
 
-    return ProjectResponseDto.fromEntity(updatedProject);
+    // Log the actual DTO object structure
+    this.logger.debug(`[UPDATE] DTO object keys: ${Object.keys(updateProjectDto).join(', ')}`);
+    this.logger.debug(
+      `[UPDATE] DTO raw values - name: ${updateProjectDto.name}, location: ${updateProjectDto.location}, description: ${updateProjectDto.description}, locationDetails: ${updateProjectDto.locationDetails}, totalUnits: ${updateProjectDto.totalUnits}, status: ${updateProjectDto.status}`,
+    );
+    this.logger.debug(
+      `[UPDATE] DTO value types - name: ${typeof updateProjectDto.name}, location: ${typeof updateProjectDto.location}, description: ${typeof updateProjectDto.description}, locationDetails: ${typeof updateProjectDto.locationDetails}, totalUnits: ${typeof updateProjectDto.totalUnits}`,
+    );
+
+    // Store original values for logging
+    const originalValues = {
+      name: project.name,
+      description: project.description,
+      location: project.location,
+      locationDetails: project.locationDetails,
+      status: project.status,
+      totalUnits: project.totalUnits,
+    };
+
+    // Track which fields are being updated
+    const fieldsToUpdate: string[] = [];
+
+    // Only update fields that are provided (not undefined and not null)
+    // Use 'in' operator to check if key exists, then check if value is not undefined/null/empty
+    if (
+      'name' in updateProjectDto &&
+      updateProjectDto.name !== undefined &&
+      updateProjectDto.name !== null
+    ) {
+      this.logger.debug(
+        `[UPDATE] Updating name: "${originalValues.name}" → "${updateProjectDto.name}"`,
+      );
+      project.name = updateProjectDto.name;
+      fieldsToUpdate.push('name');
+    }
+    if (
+      'description' in updateProjectDto &&
+      updateProjectDto.description !== undefined &&
+      updateProjectDto.description !== null
+    ) {
+      this.logger.debug(
+        `[UPDATE] Updating description: "${originalValues.description}" → "${updateProjectDto.description}"`,
+      );
+      project.description = updateProjectDto.description;
+      fieldsToUpdate.push('description');
+    }
+    if (
+      'location' in updateProjectDto &&
+      updateProjectDto.location !== undefined &&
+      updateProjectDto.location !== null
+    ) {
+      this.logger.debug(
+        `[UPDATE] Updating location: "${originalValues.location}" → "${updateProjectDto.location}"`,
+      );
+      project.location = updateProjectDto.location;
+      fieldsToUpdate.push('location');
+    }
+    if (
+      'locationDetails' in updateProjectDto &&
+      updateProjectDto.locationDetails !== undefined &&
+      updateProjectDto.locationDetails !== null
+    ) {
+      this.logger.debug(
+        `[UPDATE] Updating locationDetails: "${originalValues.locationDetails}" → "${updateProjectDto.locationDetails}"`,
+      );
+      project.locationDetails = updateProjectDto.locationDetails;
+      fieldsToUpdate.push('locationDetails');
+    }
+    if (
+      'status' in updateProjectDto &&
+      updateProjectDto.status !== undefined &&
+      updateProjectDto.status !== null
+    ) {
+      this.logger.debug(
+        `[UPDATE] Updating status: "${originalValues.status}" → "${updateProjectDto.status}"`,
+      );
+      project.status = updateProjectDto.status;
+      fieldsToUpdate.push('status');
+    }
+    if (
+      'totalUnits' in updateProjectDto &&
+      updateProjectDto.totalUnits !== undefined &&
+      updateProjectDto.totalUnits !== null
+    ) {
+      this.logger.debug(
+        `[UPDATE] Updating totalUnits: ${originalValues.totalUnits} → ${updateProjectDto.totalUnits}`,
+      );
+      project.totalUnits = updateProjectDto.totalUnits;
+      fieldsToUpdate.push('totalUnits');
+    }
+
+    if (fieldsToUpdate.length === 0) {
+      this.logger.warn(
+        `[UPDATE] WARNING - No fields to update. All values in DTO are undefined.`,
+      );
+    } else {
+      this.logger.log(
+        `[UPDATE] Fields to update: ${fieldsToUpdate.join(', ')}`,
+      );
+    }
+
+    try {
+      const updatedProject = await this.projectRepository.save(project);
+      this.logger.log(
+        `[UPDATE] SUCCESS - Project ${id} updated successfully. Updated fields: ${fieldsToUpdate.join(', ')}`,
+      );
+      this.logger.debug(
+        `[UPDATE] Final values: name="${updatedProject.name}", location="${updatedProject.location}", totalUnits=${updatedProject.totalUnits}`,
+      );
+      return ProjectResponseDto.fromEntity(updatedProject);
+    } catch (error) {
+      this.logger.error(
+        `[UPDATE] FAILED - Error saving project ${id}: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
   }
 
   /**

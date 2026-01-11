@@ -43,7 +43,7 @@ export class AuthController {
 
   @Post('register')
   @Public()
-  @ApiOperation({ summary: 'Register a new user' })
+  @ApiOperation({ summary: 'Register a new user ✅' })
   @ApiResponse({
     status: 201,
     description: 'User successfully registered',
@@ -57,7 +57,7 @@ export class AuthController {
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login user' })
+  @ApiOperation({ summary: 'Login user ✅' })
   @ApiResponse({
     status: 200,
     description: 'User successfully logged in',
@@ -71,7 +71,7 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get current authenticated user' })
+  @ApiOperation({ summary: 'Get current authenticated user ✅' })
   @ApiResponse({
     status: 200,
     description: 'Current user information',
@@ -85,7 +85,7 @@ export class AuthController {
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Update user profile' })
+  @ApiOperation({ summary: 'Update user profile ✅' })
   @ApiResponse({
     status: 200,
     description: 'Profile successfully updated',
@@ -104,7 +104,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update user password' })
+  @ApiOperation({ summary: 'Update user password ✅' })
   @ApiResponse({
     status: 200,
     description: 'Password successfully updated',
@@ -133,7 +133,7 @@ export class AuthController {
   @Post('forgot-password')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request password reset' })
+  @ApiOperation({ summary: 'Request password reset ✅' })
   @ApiResponse({
     status: 200,
     description: 'Password reset token generated',
@@ -152,7 +152,7 @@ export class AuthController {
   @Post('reset-password')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset password with token' })
+  @ApiOperation({ summary: 'Reset password with token ✅' })
   @ApiResponse({
     status: 200,
     description: 'Password successfully reset',
@@ -176,7 +176,7 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Generate or update wallet address for current user',
+    summary: 'Generate or update wallet address for current user ✅',
   })
   @ApiResponse({
     status: 200,
@@ -192,7 +192,7 @@ export class AuthController {
   @Post('refresh-token')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiOperation({ summary: 'Refresh access token using refresh token ✅' })
   @ApiResponse({
     status: 200,
     description: 'New access token generated',
@@ -210,7 +210,7 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Logout user and optionally invalidate refresh token',
+    summary: 'Logout user and optionally invalidate refresh token ✅',
   })
   @ApiBody({
     type: LogoutDto,
@@ -222,7 +222,7 @@ export class AuthController {
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Logged out successfully' },
+        message: { type: 'string', example: 'Logged out successfully ✅' },
       },
     },
   })
@@ -244,7 +244,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Verify a builder (Admin only)' })
+  @ApiOperation({ summary: 'Verify a builder (Admin only) ✅' })
   @ApiResponse({
     status: 200,
     description: 'Builder successfully verified',

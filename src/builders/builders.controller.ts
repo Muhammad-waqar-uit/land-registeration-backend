@@ -37,7 +37,7 @@ export class BuildersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
-    summary: 'Register as builder (requires admin verification)',
+    summary: 'Register as builder (requires admin verification) ✅',
     description:
       'Allows any authenticated user to request builder status by providing company information. Requires admin verification before they can operate as a builder.',
   })
@@ -61,7 +61,7 @@ export class BuildersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth('JWT-auth')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Verify a builder (Admin only)' })
+  @ApiOperation({ summary: 'Verify a builder (Admin only) ✅' })
   @ApiParam({ name: 'id', description: 'Builder ID' })
   @ApiResponse({
     status: 200,
@@ -83,7 +83,7 @@ export class BuildersController {
 
   @Get()
   @Public()
-  @ApiOperation({ summary: 'List all builders' })
+  @ApiOperation({ summary: 'List all builders ✅' })
   @ApiQuery({
     name: 'verifiedOnly',
     required: false,
@@ -107,7 +107,7 @@ export class BuildersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.BUILDER)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get current builder profile (shorthand)' })
+  @ApiOperation({ summary: 'Get current builder profile (shorthand) ✅' })
   @ApiResponse({
     status: 200,
     description: 'Current builder profile',
@@ -121,7 +121,7 @@ export class BuildersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.BUILDER)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Update builder profile (shorthand)' })
+  @ApiOperation({ summary: 'Update builder profile (shorthand) ✅' })
   @ApiResponse({
     status: 200,
     description: 'Builder profile updated',
@@ -144,8 +144,10 @@ export class BuildersController {
   }
 
   @Get('me/profile')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'Get current builder profile' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get current builder profile ✅' })
   @ApiResponse({
     status: 200,
     description: 'Current builder profile',
@@ -158,8 +160,10 @@ export class BuildersController {
   }
 
   @Patch('me/profile')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'Update builder profile' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Update builder profile ✅' })
   @ApiResponse({
     status: 200,
     description: 'Builder profile updated',
@@ -182,8 +186,10 @@ export class BuildersController {
   }
 
   @Get('me/projects')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: "Get builder's projects" })
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: "Get builder's projects ✅" })
   @ApiResponse({
     status: 200,
     description: "List of builder's projects",
@@ -193,8 +199,10 @@ export class BuildersController {
   }
 
   @Get('me/properties')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: "Get builder's properties" })
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: "Get builder's properties ✅" })
   @ApiResponse({
     status: 200,
     description: "List of builder's properties",
@@ -204,8 +212,10 @@ export class BuildersController {
   }
 
   @Get('me/dashboard')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: "Get builder's dashboard statistics" })
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: "Get builder's dashboard statistics ✅" })
   @ApiResponse({
     status: 200,
     description: 'Builder dashboard stats',
@@ -215,9 +225,11 @@ export class BuildersController {
   }
 
   @Get('me/requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.BUILDER)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
-    summary: "Get all property requests for builder's properties",
+    summary: "Get all property requests for builder's properties ✅",
     description:
       'Returns all property purchase requests (all statuses) for properties owned by the builder',
   })
@@ -235,7 +247,7 @@ export class BuildersController {
   // This must come after all /me routes
   @Get(':id')
   @Public()
-  @ApiOperation({ summary: 'Get builder by ID' })
+  @ApiOperation({ summary: 'Get builder by ID ✅' })
   @ApiParam({ name: 'id', description: 'Builder ID' })
   @ApiResponse({
     status: 200,
