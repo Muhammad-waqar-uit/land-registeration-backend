@@ -13,7 +13,7 @@ export class ContactController {
   @Post()
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send contact form message via email' })
+  @ApiOperation({ summary: 'Send contact form message via email ✅' })
   @ApiBody({
     type: ContactDto,
     description: 'Contact form data',
