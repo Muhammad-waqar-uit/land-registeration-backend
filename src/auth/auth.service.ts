@@ -717,41 +717,52 @@ export class AuthService {
       throw new BadRequestException('Builder is already verified');
     }
 
-    // Verify the builder
+    // Verify the builder - BUT DON'T SAVE YET (wait for blockchain confirmation)
     builder.isBuilderVerified = true;
     builder.builderVerifiedAt = new Date();
     builder.verifiedBy = adminId;
 
+    // Register builder on blockchain FIRST - REQUIRED
+    if (!builder.walletAddress) {
+      throw new BadRequestException(
+        'Builder must have a wallet address before verification',
+      );
+    }
+
+    if (!builder.licenseNumber) {
+      throw new BadRequestException(
+        'Builder must have a license number before verification',
+      );
+    }
+
+    if (!this.blockchainService.isContractAvailable()) {
+      throw new BadRequestException(
+        'Blockchain service is not available. Cannot verify builder without blockchain registration.',
+      );
+    }
+
+    // Register builder on blockchain - THIS MUST SUCCEED
+    const blockchainResult = await this.blockchainService.registerBuilder(
+      builder.walletAddress,
+      builder.licenseNumber,
+    );
+
+    if (!blockchainResult.success) {
+      this.logger.error(
+        `Failed to register builder on blockchain: ${blockchainResult.error}`,
+      );
+      throw new BadRequestException(
+        `Failed to register builder on blockchain: ${blockchainResult.error || 'Unknown error'}`,
+      );
+    }
+
+    this.logger.log(
+      `Builder ${builderId} registered on blockchain. TX: ${blockchainResult.transactionHash || 'N/A'}`,
+    );
+
+    // Only save to database AFTER blockchain registration succeeds
     const verifiedBuilder = await this.userRepository.save(builder);
     this.logger.log(`Builder ${builderId} verified by admin ${adminId}`);
-
-    // Register builder on blockchain if wallet address exists and contract is available
-    if (
-      verifiedBuilder.walletAddress &&
-      this.blockchainService.isContractAvailable()
-    ) {
-      try {
-        if (verifiedBuilder.licenseNumber) {
-          const blockchainResult = await this.blockchainService.registerBuilder(
-            verifiedBuilder.walletAddress,
-            verifiedBuilder.licenseNumber,
-          );
-
-          if (blockchainResult.success) {
-            this.logger.log(
-              `Builder ${builderId} registered on blockchain. TX: ${blockchainResult.transactionHash || 'N/A'}`,
-            );
-          } else {
-            this.logger.warn(
-              `Failed to register builder on blockchain: ${blockchainResult.error}`,
-            );
-          }
-        }
-      } catch (error) {
-        this.logger.error(`Error registering builder on blockchain: ${error}`);
-        // Don't fail builder verification if blockchain registration fails
-      }
-    }
 
     return UserResponseDto.fromEntity(verifiedBuilder);
   }

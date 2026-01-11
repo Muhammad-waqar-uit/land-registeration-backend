@@ -41,7 +41,27 @@ export class ProjectsController {
 
   @Post()
   @Roles(UserRole.BUILDER)
+  @UseInterceptors(FileInterceptor('approvalDocuments'))
+  @ApiConsumes('multipart/form-data', 'application/json')
   @ApiOperation({ summary: 'Create a new project (Builder only)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', example: 'Luxury Apartments Phase 1' },
+        description: { type: 'string', example: 'Modern luxury apartments' },
+        location: { type: 'string', example: 'Downtown Area, City' },
+        locationDetails: { type: 'string', example: 'Near Central Park' },
+        totalUnits: { type: 'number', example: 50 },
+        approvalDocuments: {
+          type: 'string',
+          format: 'binary',
+          description: 'Approval documents file (optional, can upload later)',
+        },
+      },
+      required: ['name', 'location'],
+    },
+  })
   @ApiResponse({
     status: 201,
     description: 'Project successfully created',
@@ -50,9 +70,22 @@ export class ProjectsController {
   @ApiResponse({ status: 403, description: 'Builder not verified' })
   async create(
     @Body() createProjectDto: CreateProjectDto,
+    @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: User,
   ): Promise<ProjectResponseDto> {
-    return this.projectsService.create(createProjectDto, user.id);
+    const project = await this.projectsService.create(createProjectDto, user.id);
+    
+    // If file was uploaded during creation, upload it
+    if (file) {
+      return this.projectsService.uploadApprovalDocuments(
+        project.id,
+        file,
+        user.id,
+        user.role,
+      );
+    }
+    
+    return project;
   }
 
   @Get()
@@ -127,7 +160,7 @@ export class ProjectsController {
 
   @Post(':id/approval-documents')
   @Roles(UserRole.BUILDER, UserRole.ADMIN)
-  @UseInterceptors(FileInterceptor('document'))
+  @UseInterceptors(FileInterceptor('approvalDocuments'))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Upload project approval documents (Builder or Admin)',
@@ -136,7 +169,7 @@ export class ProjectsController {
     schema: {
       type: 'object',
       properties: {
-        document: {
+        approvalDocuments: {
           type: 'string',
           format: 'binary',
           description: 'Approval documents file (PDF, Image, etc.)',

@@ -26,5 +26,5 @@ export const databaseConfig: TypeOrmModuleOptions = {
   ssl: {
     rejectUnauthorized: false, // Required for Neon
   },
-  logging: process.env.NODE_ENV === 'development',
+  logging: false, // Disable SQL query logging for cleaner console output
 };
