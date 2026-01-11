@@ -22,6 +22,7 @@ import { InstallmentSummaryResponseDto } from './dto/installment-summary-respons
 import { FileStorageService } from '../common/services/file-storage.service';
 import { BlockchainService } from '../common/services/blockchain.service';
 import { WalletService } from '../common/services/wallet.service';
+import { IpfsService } from '../common/services/ipfs.service';
 
 @Injectable()
 export class PaymentsService {
@@ -39,6 +40,7 @@ export class PaymentsService {
     private fileStorageService: FileStorageService,
     private blockchainService: BlockchainService,
     private walletService: WalletService,
+    private ipfsService: IpfsService,
   ) {}
 
   async create(
@@ -153,6 +155,7 @@ export class PaymentsService {
     }
 
     let proofCID: string | undefined;
+    let proofIPFSHash: string | undefined;
     let transactionHash: string | undefined;
 
     // Upload proof file if provided
@@ -162,11 +165,19 @@ export class PaymentsService {
         file,
       );
       proofCID = uploadResult.path;
+
+      // Also upload to IPFS for blockchain storage
+      try {
+        const ipfsResult = await this.ipfsService.uploadFile(file);
+        proofIPFSHash = ipfsResult.hash;
+      } catch (error) {
+        console.error('Failed to upload proof to IPFS:', error);
+        // Continue without IPFS hash if upload fails
+      }
     }
 
-    // Process ERC20 payment on blockchain if payment mode is crypto
+    // Process payment on blockchain
     if (
-      createPaymentDto.paymentMode === PaymentMode.CRYPTO &&
       land.blockchainLandId &&
       this.blockchainService.isContractAvailable()
     ) {
@@ -183,40 +194,69 @@ export class PaymentsService {
 
         if (!buyer.walletAddress) {
           throw new BadRequestException(
-            'Buyer must have a wallet address for crypto payments',
+            'Buyer must have a wallet address for blockchain payments',
           );
         }
 
-        // Get buyer's private key from HD wallet
-        const buyerPrivateKey =
-          this.walletService.getPrivateKeyFromUserId(buyerId);
+        if (createPaymentDto.paymentMode === PaymentMode.CRYPTO) {
+          // Process ERC20 crypto payment
+          const buyerPrivateKey =
+            this.walletService.getPrivateKeyFromUserId(buyerId);
 
-        // Convert amount to base units (assuming 18 decimals, will be adjusted in blockchain service)
-        const amountInBaseUnits = BigInt(
-          Math.floor(createPaymentDto.amount * 1e18),
-        );
-
-        // Make payment on blockchain
-        const paymentResult = await this.blockchainService.makeERC20Payment(
-          land.blockchainLandId,
-          buyerPrivateKey,
-          amountInBaseUnits,
-        );
-
-        if (paymentResult.success && paymentResult.transactionHash) {
-          transactionHash = paymentResult.transactionHash;
-          console.log(
-            `ERC20 payment processed on blockchain. TX: ${paymentResult.transactionHash}`,
+          // Convert amount to base units (assuming 18 decimals, will be adjusted in blockchain service)
+          const amountInBaseUnits = BigInt(
+            Math.floor(createPaymentDto.amount * 1e18),
           );
-        } else {
-          console.error(
-            'Failed to process ERC20 payment on blockchain:',
-            paymentResult.error,
+
+          const paymentResult = await this.blockchainService.makeERC20Payment(
+            land.blockchainLandId,
+            buyerPrivateKey,
+            amountInBaseUnits,
           );
-          // Continue with database payment record even if blockchain fails
+
+          if (paymentResult.success && paymentResult.transactionHash) {
+            transactionHash = paymentResult.transactionHash;
+            console.log(
+              `ERC20 payment processed on blockchain. TX: ${paymentResult.transactionHash}`,
+            );
+          } else {
+            console.error(
+              'Failed to process ERC20 payment on blockchain:',
+              paymentResult.error,
+            );
+            // Continue with database payment record even if blockchain fails
+          }
+        } else if (
+          createPaymentDto.paymentMode === PaymentMode.BANK &&
+          proofIPFSHash
+        ) {
+          // Submit bank payment proof to blockchain
+          const amountInBaseUnits = BigInt(
+            Math.floor(createPaymentDto.amount * 1e18),
+          );
+
+          const submitResult = await this.blockchainService.submitBankPayment(
+            land.blockchainLandId,
+            buyer.walletAddress,
+            amountInBaseUnits,
+            proofIPFSHash,
+          );
+
+          if (submitResult.success && submitResult.transactionHash) {
+            transactionHash = submitResult.transactionHash;
+            console.log(
+              `Bank payment proof submitted to blockchain. TX: ${submitResult.transactionHash}`,
+            );
+          } else {
+            console.error(
+              'Failed to submit bank payment proof to blockchain:',
+              submitResult.error,
+            );
+            // Continue with database payment record even if blockchain fails
+          }
         }
       } catch (error) {
-        console.error('Error processing ERC20 payment:', error);
+        console.error('Error processing payment on blockchain:', error);
         // Continue with database payment record even if blockchain fails
       }
     }
@@ -371,6 +411,39 @@ export class PaymentsService {
       ? PaymentStatus.VERIFIED
       : PaymentStatus.REJECTED;
     payment.remarks = verifyPaymentDto.remarks || null;
+
+    // Verify/reject bank payment on blockchain if payment mode is bank
+    if (
+      payment.paymentMode === PaymentMode.BANK &&
+      payment.land.blockchainLandId &&
+      this.blockchainService.isContractAvailable()
+    ) {
+      try {
+        const verifyResult = await this.blockchainService.verifyBankPayment(
+          payment.land.blockchainLandId,
+          verifyPaymentDto.verified,
+        );
+
+        if (verifyResult.success && verifyResult.transactionHash) {
+          // Update transaction hash if not already set
+          if (!payment.transactionHash) {
+            payment.transactionHash = verifyResult.transactionHash;
+          }
+          console.log(
+            `Bank payment ${verifyPaymentDto.verified ? 'verified' : 'rejected'} on blockchain. TX: ${verifyResult.transactionHash}`,
+          );
+        } else {
+          console.error(
+            `Failed to ${verifyPaymentDto.verified ? 'verify' : 'reject'} bank payment on blockchain:`,
+            verifyResult.error,
+          );
+          // Continue with database update even if blockchain fails
+        }
+      } catch (error) {
+        console.error('Error verifying bank payment on blockchain:', error);
+        // Continue with database update even if blockchain fails
+      }
+    }
 
     await this.paymentRepository.save(payment);
 

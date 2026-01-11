@@ -235,7 +235,19 @@ export class LandsService {
     }
 
     // Prepare IPFS hash (use document IPFS hash if available, otherwise empty string)
-    const ipfsHash = documentIPFSHash || imageIPFSHash || '';
+    const ipfsHashFormatted = documentIPFSHash || imageIPFSHash || '';
+
+    // Extract just the hash from formatted JSON string for blockchain (contract expects just CID)
+    let ipfsHashForBlockchain = '';
+    if (ipfsHashFormatted) {
+      try {
+        const ipfsData = JSON.parse(ipfsHashFormatted);
+        ipfsHashForBlockchain = ipfsData.hash || '';
+      } catch {
+        // If not JSON, assume it's already just the hash
+        ipfsHashForBlockchain = ipfsHashFormatted;
+      }
+    }
 
     // Convert price to wei (assuming price is in base currency, adjust if needed)
     // For now, we'll use the price as-is (you may need to adjust based on your token decimals)
@@ -249,7 +261,7 @@ export class LandsService {
       try {
         const blockchainResult = await this.blockchainService.registerLand(
           builder.walletAddress,
-          ipfsHash,
+          ipfsHashForBlockchain,
           documentHash,
           priceInWei,
         );
@@ -451,10 +463,23 @@ export class LandsService {
     }
 
     // Check if IPFS hash was updated
+    let ipfsHashFormattedForUpdate: string | undefined;
     if (land.documentIPFSHash) {
-      newIpfsHash = land.documentIPFSHash;
+      ipfsHashFormattedForUpdate = land.documentIPFSHash;
     } else if (land.imageIPFSHash) {
-      newIpfsHash = land.imageIPFSHash;
+      ipfsHashFormattedForUpdate = land.imageIPFSHash;
+    }
+
+    // Extract just the hash from formatted JSON for blockchain (contract expects just CID)
+    let ipfsHashForBlockchainUpdate = '';
+    if (ipfsHashFormattedForUpdate) {
+      try {
+        const ipfsData = JSON.parse(ipfsHashFormattedForUpdate);
+        ipfsHashForBlockchainUpdate = ipfsData.hash || '';
+      } catch {
+        // If not JSON, assume it's already just the hash
+        ipfsHashForBlockchainUpdate = ipfsHashFormattedForUpdate;
+      }
     }
 
     // Check if price was updated
@@ -466,12 +491,12 @@ export class LandsService {
     if (
       this.blockchainService.isContractAvailable() &&
       land.blockchainLandId &&
-      (newDocumentHash || newIpfsHash || newPrice)
+      (newDocumentHash || ipfsHashForBlockchainUpdate || newPrice)
     ) {
       try {
         const updateResult = await this.blockchainService.updateLand(
           land.blockchainLandId,
-          newIpfsHash || '',
+          ipfsHashForBlockchainUpdate || '',
           newDocumentHash || '',
           newPrice || BigInt(0),
         );

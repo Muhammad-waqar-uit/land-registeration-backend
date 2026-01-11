@@ -42,7 +42,7 @@ export interface MakePaymentResult {
   error?: string;
 }
 
-// Smart Contract ABI (updated for admin-only, address-parameter functions and builder-centric features)
+// Smart Contract ABI - Complete integration with LandRegistryUpgradeable contract
 const LAND_REGISTRY_ABI = [
   // Land registration and management
   'function registerLand(address _owner, string memory _ipfsHash, bytes32 _documentHash, uint256 _totalPrice) external',
@@ -56,8 +56,11 @@ const LAND_REGISTRY_ABI = [
   'function submitBankPayment(uint256 landId, address buyer, uint256 amount, string memory proofHash) external',
   'function verifyBankPayment(uint256 landId, bool approved) external',
   // Ownership transfer
+  'function requestSellerApproval(uint256 landId) external',
   'function sellerApproveTransfer(uint256 landId, address seller) external',
   'function sellerRevokeApproval(uint256 landId, address seller) external',
+  'function adminBypassSellerApproval(uint256 landId) external',
+  // Refunds
   'function requestRefund(uint256 landId, address buyer) external',
   // Builder registry
   'function registerBuilder(address builderAddress, string memory licenseNumber) external',
@@ -68,6 +71,8 @@ const LAND_REGISTRY_ABI = [
   // Agreement and ownership document storage
   'function storeAgreementHash(uint256 landId, bytes32 agreementHash, string memory agreementIPFSHash) external',
   'function storeOwnershipDocumentHash(uint256 landId, bytes32 documentHash, string memory documentIPFSHash) external',
+  // Configuration
+  'function setPenaltyBasisPoints(uint16 _penaltyBasisPoints) external',
   // View functions
   'function getPaymentBreakdown(uint256 landId) view returns (uint256 totalPaid, uint256 cryptoPaid, uint256 bankPaid, uint256 remaining)',
   'function getAgreementHash(uint256 landId) view returns (bytes32, string memory, uint256, bool)',
@@ -80,7 +85,17 @@ const LAND_REGISTRY_ABI = [
   'event LandLocked(uint256 indexed landId, address indexed buyer)',
   'event LandUpdateRequested(uint256 indexed landId, address indexed seller, bytes32 newDocumentHash)',
   'event LandUpdateApproved(uint256 indexed landId, address indexed seller)',
+  'event LandUpdateRevoked(uint256 indexed landId, address indexed seller)',
   'event PaymentReceived(uint256 indexed landId, address indexed buyer, uint256 amount, bool isBankPayment)',
+  'event BankPaymentSubmitted(uint256 indexed landId, address indexed buyer, uint256 amount, string proofHash)',
+  'event BankPaymentVerified(uint256 indexed landId, address verifier, uint256 amount)',
+  'event BankPaymentRejected(uint256 indexed landId, address verifier)',
+  'event OwnershipTransferred(uint256 indexed landId, address oldOwner, address newOwner)',
+  'event SellerApprovalRequested(uint256 indexed landId, address buyer)',
+  'event SellerApprovalGranted(uint256 indexed landId, address seller)',
+  'event SellerApprovalRevoked(uint256 indexed landId, address seller)',
+  'event RefundProcessed(uint256 indexed landId, address buyer, uint256 refundedAmount, uint256 penalty)',
+  'event PenaltyBasisPointsUpdated(uint16 oldPenalty, uint16 newPenalty)',
   'event BuilderRegistered(address indexed builder, string licenseNumber, uint256 registeredAt)',
   'event AgreementHashStored(uint256 indexed landId, bytes32 agreementHash, string agreementIPFSHash, uint256 storedAt)',
   'event OwnershipDocumentHashStored(uint256 indexed landId, bytes32 documentHash, string documentIPFSHash, uint256 storedAt)',
@@ -1174,6 +1189,696 @@ export class BlockchainService {
       };
     } catch (error) {
       this.logger.error(`Error unlocking land ${landId}:`, error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Submit bank payment proof on blockchain
+   * @param landId - Blockchain land ID
+   * @param buyerAddress - Buyer wallet address
+   * @param amount - Payment amount (in base token units)
+   * @param proofHash - IPFS hash of bank payment proof document
+   * @returns Transaction result
+   */
+  async submitBankPayment(
+    landId: number,
+    buyerAddress: string,
+    amount: bigint,
+    proofHash: string,
+  ): Promise<MakePaymentResult> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.submitBankPayment(
+        landId,
+        buyerAddress,
+        amount,
+        proofHash,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Submitting bank payment proof for land ${landId} by buyer ${buyerAddress}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(
+        `Bank payment proof submitted successfully. TX: ${tx.hash}`,
+      );
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error submitting bank payment:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Verify or reject bank payment on blockchain
+   * @param landId - Blockchain land ID
+   * @param approved - true to approve, false to reject
+   * @returns Transaction result
+   */
+  async verifyBankPayment(
+    landId: number,
+    approved: boolean,
+  ): Promise<MakePaymentResult> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.verifyBankPayment(
+        landId,
+        approved,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `${approved ? 'Verifying' : 'Rejecting'} bank payment for land ${landId}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(
+        `Bank payment ${approved ? 'verified' : 'rejected'} successfully. TX: ${tx.hash}`,
+      );
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error verifying bank payment:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Request seller approval for ownership transfer
+   * @param landId - Blockchain land ID
+   * @returns Transaction result
+   */
+  async requestSellerApproval(
+    landId: number,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.requestSellerApproval(
+        landId,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Requesting seller approval for land ${landId}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(
+        `Seller approval requested successfully. TX: ${tx.hash}`,
+      );
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error requesting seller approval:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Admin bypass seller approval (emergency only)
+   * @param landId - Blockchain land ID
+   * @returns Transaction result
+   */
+  async adminBypassSellerApproval(
+    landId: number,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.adminBypassSellerApproval(
+        landId,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.warn(
+        `⚠️ Admin bypassing seller approval for land ${landId}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(
+        `Seller approval bypassed successfully. TX: ${tx.hash}`,
+      );
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error bypassing seller approval:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Revoke seller approval for ownership transfer
+   * @param landId - Blockchain land ID
+   * @param sellerAddress - Seller wallet address
+   * @returns Transaction result
+   */
+  async revokeSellerApproval(
+    landId: number,
+    sellerAddress: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.sellerRevokeApproval(
+        landId,
+        sellerAddress,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Revoking seller approval for land ${landId} by seller ${sellerAddress}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(
+        `Seller approval revoked successfully. TX: ${tx.hash}`,
+      );
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error revoking seller approval:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Process refund request on blockchain
+   * @param landId - Blockchain land ID
+   * @param buyerAddress - Buyer wallet address
+   * @returns Transaction result
+   */
+  async requestRefund(
+    landId: number,
+    buyerAddress: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.requestRefund(
+        landId,
+        buyerAddress,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Processing refund for land ${landId} for buyer ${buyerAddress}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(`Refund processed successfully. TX: ${tx.hash}`);
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error processing refund:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Grant builder role on blockchain
+   * @param builderAddress - Builder wallet address
+   * @returns Transaction result
+   */
+  async grantBuilderRole(
+    builderAddress: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.grantBuilderRole(
+        builderAddress,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Granting builder role to ${builderAddress}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(`Builder role granted successfully. TX: ${tx.hash}`);
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error granting builder role:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Revoke builder role on blockchain
+   * @param builderAddress - Builder wallet address
+   * @returns Transaction result
+   */
+  async revokeBuilderRole(
+    builderAddress: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.revokeBuilderRole(
+        builderAddress,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Revoking builder role from ${builderAddress}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(`Builder role revoked successfully. TX: ${tx.hash}`);
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error revoking builder role:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Approve land update on behalf of seller (for document hash changes)
+   * @param landId - Blockchain land ID
+   * @param sellerAddress - Seller wallet address
+   * @returns Transaction result
+   */
+  async sellerApproveUpdate(
+    landId: number,
+    sellerAddress: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.sellerApproveUpdate(
+        landId,
+        sellerAddress,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Seller approving update for land ${landId} by seller ${sellerAddress}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(`Land update approved successfully. TX: ${tx.hash}`);
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error approving land update:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Revoke land update approval on behalf of seller
+   * @param landId - Blockchain land ID
+   * @param sellerAddress - Seller wallet address
+   * @returns Transaction result
+   */
+  async sellerRevokeUpdateApproval(
+    landId: number,
+    sellerAddress: string,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.sellerRevokeUpdateApproval(
+        landId,
+        sellerAddress,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Seller revoking update approval for land ${landId} by seller ${sellerAddress}. Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(`Land update approval revoked successfully. TX: ${tx.hash}`);
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error revoking land update approval:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Get agreement hash from blockchain
+   * @param landId - Blockchain land ID
+   * @returns Agreement hash data or null
+   */
+  async getAgreementHash(landId: number): Promise<{
+    agreementHash: string;
+    agreementIPFSHash: string;
+    storedAt: bigint;
+    exists: boolean;
+  } | null> {
+    if (!this.isContractAvailable()) {
+      return null;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const agreementData = await this.contract!.getAgreementHash(landId);
+      return {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        agreementHash: agreementData[0] as string,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        agreementIPFSHash: agreementData[1] as string,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        storedAt: agreementData[2] as bigint,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        exists: agreementData[3] as boolean,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting agreement hash for land ${landId}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Get ownership document hash from blockchain
+   * @param landId - Blockchain land ID
+   * @returns Ownership document hash data or null
+   */
+  async getOwnershipDocumentHash(landId: number): Promise<{
+    documentHash: string;
+    documentIPFSHash: string;
+    storedAt: bigint;
+    exists: boolean;
+  } | null> {
+    if (!this.isContractAvailable()) {
+      return null;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const docData = await this.contract!.getOwnershipDocumentHash(landId);
+      return {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        documentHash: docData[0] as string,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        documentIPFSHash: docData[1] as string,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        storedAt: docData[2] as bigint,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        exists: docData[3] as boolean,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting ownership document hash for land ${landId}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Get seller approval status from blockchain
+   * @param landId - Blockchain land ID
+   * @returns Seller approval status or null
+   */
+  async getSellerApprovalStatus(landId: number): Promise<{
+    approvalPending: boolean;
+    approved: boolean;
+    seller: string;
+  } | null> {
+    if (!this.isContractAvailable()) {
+      return null;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const status = await this.contract!.getSellerApprovalStatus(landId);
+      return {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        approvalPending: status[0] as boolean,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        approved: status[1] as boolean,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        seller: status[2] as string,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting seller approval status for land ${landId}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Update penalty basis points for refunds
+   * @param penaltyBasisPoints - New penalty in basis points (10000 = 100%)
+   * @returns Transaction result
+   */
+  async setPenaltyBasisPoints(
+    penaltyBasisPoints: number,
+  ): Promise<{ success: boolean; transactionHash?: string; error?: string }> {
+    if (!this.isContractAvailable()) {
+      return {
+        success: false,
+        error: 'Smart contract not available',
+      };
+    }
+
+    if (penaltyBasisPoints > 10000) {
+      return {
+        success: false,
+        error: 'Penalty cannot exceed 100% (10000 basis points)',
+      };
+    }
+
+    try {
+      const tx = (await this.contract!.setPenaltyBasisPoints(
+        penaltyBasisPoints,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Setting penalty basis points to ${penaltyBasisPoints} (${penaltyBasisPoints / 100}%). Transaction: ${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Transaction failed or reverted',
+        };
+      }
+
+      this.logger.log(
+        `Penalty basis points updated successfully. TX: ${tx.hash}`,
+      );
+
+      return {
+        success: true,
+        transactionHash: tx.hash,
+      };
+    } catch (error) {
+      this.logger.error('Error setting penalty basis points:', error);
       return {
         success: false,
         error:

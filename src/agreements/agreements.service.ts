@@ -482,6 +482,18 @@ This document is digitally stored and verifiable on the blockchain.
 
       // Step 5.3 Flow Step 6: Store signed document on IPFS (already done above)
       // Step 5.3 Flow Step 7: Store agreement hash on blockchain
+      // Extract just the hash from formatted JSON for blockchain (contract expects just CID)
+      let ipfsHashForBlockchain = '';
+      if (signedIPFSHash) {
+        try {
+          const ipfsData = JSON.parse(signedIPFSHash);
+          ipfsHashForBlockchain = ipfsData.hash || '';
+        } catch {
+          // If not JSON, assume it's already just the hash
+          ipfsHashForBlockchain = signedIPFSHash;
+        }
+      }
+
       if (
         this.blockchainService.isContractAvailable() &&
         agreement.property.blockchainLandId
@@ -491,7 +503,7 @@ This document is digitally stored and verifiable on the blockchain.
             await this.blockchainService.storeAgreementHash(
               agreement.property.blockchainLandId,
               signedHash,
-              signedIPFSHash || '',
+              ipfsHashForBlockchain,
             );
 
           if (blockchainResult.success && blockchainResult.transactionHash) {
@@ -605,6 +617,18 @@ This document is digitally stored and verifiable on the blockchain.
         agreement.status = AgreementStatus.SIGNED;
 
         // Store agreement hash on blockchain if available
+        // Extract just the hash from formatted JSON for blockchain (contract expects just CID)
+        let documentIpfsHashForBlockchain = '';
+        if (documentIPFSHash) {
+          try {
+            const ipfsData = JSON.parse(documentIPFSHash);
+            documentIpfsHashForBlockchain = ipfsData.hash || '';
+          } catch {
+            // If not JSON, assume it's already just the hash
+            documentIpfsHashForBlockchain = documentIPFSHash;
+          }
+        }
+
         if (
           this.blockchainService.isContractAvailable() &&
           agreement.property.blockchainLandId
@@ -614,7 +638,7 @@ This document is digitally stored and verifiable on the blockchain.
               await this.blockchainService.storeAgreementHash(
                 agreement.property.blockchainLandId,
                 documentHash,
-                documentIPFSHash || '',
+                documentIpfsHashForBlockchain,
               );
 
             if (blockchainResult.success && blockchainResult.transactionHash) {
@@ -1115,6 +1139,18 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
     }
 
     // Step 5.5 Flow Step 4: Store hash on blockchain
+    // Extract just the hash from formatted JSON for blockchain (contract expects just CID)
+    let ipfsHashForBlockchain = '';
+    if (ipfsHash) {
+      try {
+        const ipfsData = JSON.parse(ipfsHash);
+        ipfsHashForBlockchain = ipfsData.hash || '';
+      } catch {
+        // If not JSON, assume it's already just the hash
+        ipfsHashForBlockchain = ipfsHash;
+      }
+    }
+
     let blockchainTxHash: string | null = null;
     if (
       this.blockchainService.isContractAvailable() &&
@@ -1125,7 +1161,7 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
           await this.blockchainService.storeOwnershipDocumentHash(
             property.blockchainLandId,
             documentHash,
-            ipfsHash || '',
+            ipfsHashForBlockchain,
           );
 
         if (blockchainResult.success && blockchainResult.transactionHash) {
