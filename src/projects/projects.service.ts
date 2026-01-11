@@ -284,4 +284,108 @@ export class ProjectsService {
     const updatedProject = await this.projectRepository.save(project);
     return ProjectResponseDto.fromEntity(updatedProject);
   }
+
+  /**
+   * Verify approval document integrity by comparing SHA-256 hash
+   * Reads stored file from uploads and compares its hash with stored hash in database
+   * @param projectId - Project ID
+   * @returns Verification result for approval document
+   */
+  async verifyDocumentIntegrity(projectId: string): Promise<{
+    verified: boolean;
+    message: string;
+    document?: {
+      verified: boolean;
+      message: string;
+      storedHash?: string;
+      calculatedHash?: string;
+    };
+  }> {
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      return {
+        verified: false,
+        message: 'Project not found',
+      };
+    }
+
+    // Verify approval document
+    const documentResult = await this.verifyApprovalDocument(project);
+
+    const allVerified = documentResult.verified;
+
+    return {
+      verified: allVerified,
+      message: allVerified
+        ? 'Approval document verified successfully.'
+        : 'Approval document verification failed.',
+      document: documentResult,
+    };
+  }
+
+  /**
+   * Verify approval document integrity by comparing SHA-256 hash
+   * @param project - Project entity
+   * @returns Verification result for the approval document
+   */
+  private async verifyApprovalDocument(
+    project: Project,
+  ): Promise<{
+    verified: boolean;
+    message: string;
+    storedHash?: string;
+    calculatedHash?: string;
+  }> {
+    const storedHash = project.approvalDocumentsHash;
+    const filePath = project.approvalDocumentsCID;
+
+    if (!storedHash || !filePath) {
+      return {
+        verified: false,
+        message: 'Approval document not available for verification.',
+      };
+    }
+
+    try {
+      // Extract filename from path (e.g., "project-approvals/1234567890-doc.pdf" -> "1234567890-doc.pdf")
+      const fileName = filePath.split('/').pop() || filePath;
+
+      // Read file from storage
+      const fileBuffer = await this.fileStorageService.readFile(
+        'project-approvals',
+        fileName,
+      );
+
+      // Calculate hash of stored file
+      const calculatedHash = this.hashService.calculateSHA256(fileBuffer);
+      const verified = this.hashService.verifyHash(fileBuffer, storedHash);
+
+      if (verified) {
+        return {
+          verified: true,
+          message:
+            'Approval document is genuine and has not been tampered with.',
+          storedHash,
+          calculatedHash,
+        };
+      } else {
+        return {
+          verified: false,
+          message:
+            'Approval document verification failed. The file may have been tampered with.',
+          storedHash,
+          calculatedHash,
+        };
+      }
+    } catch (error) {
+      return {
+        verified: false,
+        message: `Failed to read approval document file: ${(error as Error).message}`,
+        storedHash,
+      };
+    }
+  }
 }

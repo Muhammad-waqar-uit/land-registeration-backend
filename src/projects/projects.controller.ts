@@ -158,6 +158,46 @@ export class ProjectsController {
     return this.projectsService.remove(id, user.id, user.role);
   }
 
+  @Get(':id/verify')
+  @ApiOperation({ summary: 'Verify approval document integrity' })
+  @ApiResponse({
+    status: 200,
+    description: 'Verification result for approval document',
+    schema: {
+      type: 'object',
+      properties: {
+        verified: { type: 'boolean', example: true },
+        message: {
+          type: 'string',
+          example: 'Approval document verified successfully.',
+        },
+        document: {
+          type: 'object',
+          properties: {
+            verified: { type: 'boolean', example: true },
+            message: {
+              type: 'string',
+              example:
+                'Approval document is genuine and has not been tampered with.',
+            },
+            storedHash: {
+              type: 'string',
+              example: 'a1b2c3d4e5f6...',
+            },
+            calculatedHash: {
+              type: 'string',
+              example: 'a1b2c3d4e5f6...',
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async verifyDocument(@Param('id', ParseUUIDPipe) id: string) {
+    return this.projectsService.verifyDocumentIntegrity(id);
+  }
+
   @Post(':id/approval-documents')
   @Roles(UserRole.BUILDER, UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('approvalDocuments'))
