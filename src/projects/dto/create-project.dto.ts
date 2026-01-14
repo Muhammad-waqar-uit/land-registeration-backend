@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsNotEmpty, MaxLength, IsNumber, IsInt, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNotEmpty,
+  MaxLength,
+  IsNumber,
+  IsInt,
+  Min,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 
@@ -8,13 +16,15 @@ export class CreateProjectDto {
     example: 'Luxury Apartments Phase 1',
     maxLength: 255,
   })
-  @Transform(({ value }) => {
+  @Transform(({ value }): string | null | undefined => {
     if (value === null || value === undefined) return value;
     return typeof value === 'string' ? value.trim() : String(value).trim();
   })
   @IsNotEmpty({ message: 'Project name is required' })
   @IsString({ message: 'Project name must be a string' })
-  @MaxLength(255, { message: 'Project name must be shorter than or equal to 255 characters' })
+  @MaxLength(255, {
+    message: 'Project name must be shorter than or equal to 255 characters',
+  })
   name: string;
 
   @ApiProperty({
@@ -35,13 +45,15 @@ export class CreateProjectDto {
     example: 'Downtown Area, City',
     maxLength: 255,
   })
-  @Transform(({ value }) => {
+  @Transform(({ value }): string | null | undefined => {
     if (value === null || value === undefined) return value;
     return typeof value === 'string' ? value.trim() : String(value).trim();
   })
   @IsNotEmpty({ message: 'Project location is required' })
   @IsString({ message: 'Project location must be a string' })
-  @MaxLength(255, { message: 'Project location must be shorter than or equal to 255 characters' })
+  @MaxLength(255, {
+    message: 'Project location must be shorter than or equal to 255 characters',
+  })
   location: string;
 
   @ApiProperty({

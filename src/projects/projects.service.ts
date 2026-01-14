@@ -197,7 +197,9 @@ export class ProjectsService {
     this.logger.log(`[UPDATE] Status check passed`);
 
     // Log the actual DTO object structure
-    this.logger.debug(`[UPDATE] DTO object keys: ${Object.keys(updateProjectDto).join(', ')}`);
+    this.logger.debug(
+      `[UPDATE] DTO object keys: ${Object.keys(updateProjectDto).join(', ')}`,
+    );
     this.logger.debug(
       `[UPDATE] DTO raw values - name: ${updateProjectDto.name}, location: ${updateProjectDto.location}, description: ${updateProjectDto.description}, locationDetails: ${updateProjectDto.locationDetails}, totalUnits: ${updateProjectDto.totalUnits}, status: ${updateProjectDto.status}`,
     );
@@ -307,9 +309,12 @@ export class ProjectsService {
       );
       return ProjectResponseDto.fromEntity(updatedProject);
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(
-        `[UPDATE] FAILED - Error saving project ${id}: ${error.message}`,
-        error.stack,
+        `[UPDATE] FAILED - Error saving project ${id}: ${errorMessage}`,
+        errorStack,
       );
       throw error;
     }
@@ -466,9 +471,7 @@ export class ProjectsService {
    * @param project - Project entity
    * @returns Verification result for the approval document
    */
-  private async verifyApprovalDocument(
-    project: Project,
-  ): Promise<{
+  private async verifyApprovalDocument(project: Project): Promise<{
     verified: boolean;
     message: string;
     storedHash?: string;

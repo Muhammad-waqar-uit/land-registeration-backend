@@ -78,8 +78,11 @@ export class ProjectsController {
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: User,
   ): Promise<ProjectResponseDto> {
-    const project = await this.projectsService.create(createProjectDto, user.id);
-    
+    const project = await this.projectsService.create(
+      createProjectDto,
+      user.id,
+    );
+
     // If file was uploaded during creation, upload it
     if (file) {
       return this.projectsService.uploadApprovalDocuments(
@@ -89,7 +92,7 @@ export class ProjectsController {
         user.role,
       );
     }
-    
+
     return project;
   }
 
@@ -141,9 +144,15 @@ export class ProjectsController {
         name: { type: 'string', example: 'Updated Project Name' },
         location: { type: 'string', example: 'Updated Location' },
         description: { type: 'string', example: 'Updated description' },
-        locationDetails: { type: 'string', example: 'Updated location details' },
+        locationDetails: {
+          type: 'string',
+          example: 'Updated location details',
+        },
         totalUnits: { type: 'number', example: 50 },
-        status: { type: 'string', enum: ['draft', 'active', 'completed', 'cancelled'] },
+        status: {
+          type: 'string',
+          enum: ['draft', 'active', 'completed', 'cancelled'],
+        },
       },
     },
     description: 'Project update data (supports both JSON and FormData)',
@@ -167,7 +176,7 @@ export class ProjectsController {
     this.logger.debug(
       `[CONTROLLER] Content-Type: ${request.headers['content-type']}`,
     );
-    
+
     this.logger.log(
       `[CONTROLLER] Update request received for project ${id} from user ${user.id} (${user.email})`,
     );
@@ -213,9 +222,12 @@ export class ProjectsController {
       );
       return result;
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(
-        `[CONTROLLER] FAILED - Error updating project ${id}: ${error.message}`,
-        error.stack,
+        `[CONTROLLER] FAILED - Error updating project ${id}: ${errorMessage}`,
+        errorStack,
       );
       throw error;
     }
@@ -280,7 +292,7 @@ export class ProjectsController {
     summary: 'Upload project approval documents (Builder or Admin) ✅     ',
   })
   @ApiBody({
-    schema: {   
+    schema: {
       type: 'object',
       properties: {
         approvalDocuments: {

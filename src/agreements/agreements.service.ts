@@ -486,7 +486,7 @@ This document is digitally stored and verifiable on the blockchain.
       let ipfsHashForBlockchain = '';
       if (signedIPFSHash) {
         try {
-          const ipfsData = JSON.parse(signedIPFSHash);
+          const ipfsData = JSON.parse(signedIPFSHash) as { hash?: string };
           ipfsHashForBlockchain = ipfsData.hash || '';
         } catch {
           // If not JSON, assume it's already just the hash
@@ -621,7 +621,7 @@ This document is digitally stored and verifiable on the blockchain.
         let documentIpfsHashForBlockchain = '';
         if (documentIPFSHash) {
           try {
-            const ipfsData = JSON.parse(documentIPFSHash);
+            const ipfsData = JSON.parse(documentIPFSHash) as { hash?: string };
             documentIpfsHashForBlockchain = ipfsData.hash || '';
           } catch {
             // If not JSON, assume it's already just the hash
@@ -1143,7 +1143,7 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
     let ipfsHashForBlockchain = '';
     if (ipfsHash) {
       try {
-        const ipfsData = JSON.parse(ipfsHash);
+        const ipfsData = JSON.parse(ipfsHash) as { hash?: string };
         ipfsHashForBlockchain = ipfsData.hash || '';
       } catch {
         // If not JSON, assume it's already just the hash

@@ -16,6 +16,7 @@ import { AgreementsModule } from './agreements/agreements.module';
 import { PropertyRequestsModule } from './property-requests/property-requests.module';
 import { ResaleRequestsModule } from './resale-requests/resale-requests.module';
 import { InstallmentsModule } from './installments/installments.module';
+import { TokensModule } from './tokens/tokens.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { InstallmentsModule } from './installments/installments.module';
     PropertyRequestsModule,
     ResaleRequestsModule,
     InstallmentsModule,
+    TokensModule,
   ],
   controllers: [AppController],
   providers: [AppService],

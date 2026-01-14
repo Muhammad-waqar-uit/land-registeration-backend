@@ -42,6 +42,20 @@ export interface MakePaymentResult {
   error?: string;
 }
 
+export interface GetBalanceResult {
+  success: boolean;
+  balance?: string; // Balance in human-readable format (with decimals)
+  balanceRaw?: bigint; // Raw balance from blockchain
+  decimals?: number;
+  error?: string;
+}
+
+export interface MintTokenResult {
+  success: boolean;
+  transactionHash?: string;
+  error?: string;
+}
+
 // Smart Contract ABI - Complete integration with LandRegistryUpgradeable contract
 const LAND_REGISTRY_ABI = [
   // Land registration and management
@@ -108,6 +122,8 @@ const ERC20_ABI = [
   'function balanceOf(address account) view returns (uint256)',
   'function decimals() view returns (uint8)',
   'function transfer(address to, uint256 amount) external returns (bool)',
+  'function mint(address to, uint256 amount) external',
+  'function owner() view returns (address)',
 ];
 
 @Injectable()
@@ -1344,9 +1360,7 @@ export class BlockchainService {
         };
       }
 
-      this.logger.log(
-        `Seller approval requested successfully. TX: ${tx.hash}`,
-      );
+      this.logger.log(`Seller approval requested successfully. TX: ${tx.hash}`);
 
       return {
         success: true,
@@ -1395,9 +1409,7 @@ export class BlockchainService {
         };
       }
 
-      this.logger.log(
-        `Seller approval bypassed successfully. TX: ${tx.hash}`,
-      );
+      this.logger.log(`Seller approval bypassed successfully. TX: ${tx.hash}`);
 
       return {
         success: true,
@@ -1449,9 +1461,7 @@ export class BlockchainService {
         };
       }
 
-      this.logger.log(
-        `Seller approval revoked successfully. TX: ${tx.hash}`,
-      );
+      this.logger.log(`Seller approval revoked successfully. TX: ${tx.hash}`);
 
       return {
         success: true,
@@ -1705,7 +1715,9 @@ export class BlockchainService {
         };
       }
 
-      this.logger.log(`Land update approval revoked successfully. TX: ${tx.hash}`);
+      this.logger.log(
+        `Land update approval revoked successfully. TX: ${tx.hash}`,
+      );
 
       return {
         success: true,
@@ -1879,6 +1891,164 @@ export class BlockchainService {
       };
     } catch (error) {
       this.logger.error('Error setting penalty basis points:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Get ERC20 token balance for a user address
+   * @param userAddress - User's wallet address
+   * @returns Balance result with human-readable balance and raw balance
+   */
+  async getERC20Balance(userAddress: string): Promise<GetBalanceResult> {
+    if (!this.provider) {
+      return {
+        success: false,
+        error: 'Blockchain provider not configured',
+      };
+    }
+
+    const tokenAddress = this.configService.get<string>(
+      'PAYMENT_TOKEN_ADDRESS',
+    );
+    if (!tokenAddress) {
+      return {
+        success: false,
+        error: 'PAYMENT_TOKEN_ADDRESS not configured',
+      };
+    }
+
+    try {
+      // Validate address format
+      if (!ethers.isAddress(userAddress)) {
+        return {
+          success: false,
+          error: 'Invalid wallet address format',
+        };
+      }
+
+      const tokenContract = new ethers.Contract(
+        tokenAddress,
+        ERC20_ABI,
+        this.provider,
+      );
+
+      // Get balance and decimals
+
+      const balanceRaw = (await tokenContract.balanceOf(userAddress)) as bigint;
+
+      const decimals = (await tokenContract.decimals()) as bigint;
+
+      // Convert to human-readable format
+      const balance = ethers.formatUnits(balanceRaw, Number(decimals));
+
+      this.logger.log(
+        `Balance for ${userAddress}: ${balance} tokens (raw: ${balanceRaw.toString()})`,
+      );
+
+      return {
+        success: true,
+        balance,
+        balanceRaw,
+        decimals: Number(decimals),
+      };
+    } catch (error) {
+      this.logger.error(`Error getting balance for ${userAddress}:`, error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Mint ERC20 tokens to a specific address (admin only)
+   * @param toAddress - Address to mint tokens to
+   * @param amount - Amount to mint (in token units, will be converted based on decimals)
+   * @returns Mint result with transaction hash
+   */
+  async mintToken(toAddress: string, amount: bigint): Promise<MintTokenResult> {
+    if (!this.isContractAvailable() || !this.provider) {
+      return {
+        success: false,
+        error: 'Blockchain service not available',
+      };
+    }
+
+    const tokenAddress = this.configService.get<string>(
+      'PAYMENT_TOKEN_ADDRESS',
+    );
+    if (!tokenAddress) {
+      return {
+        success: false,
+        error: 'PAYMENT_TOKEN_ADDRESS not configured',
+      };
+    }
+
+    try {
+      // Validate address format
+      if (!ethers.isAddress(toAddress)) {
+        return {
+          success: false,
+          error: 'Invalid recipient address format',
+        };
+      }
+
+      // Get token contract with admin signer
+      const tokenContract = new ethers.Contract(
+        tokenAddress,
+        ERC20_ABI,
+        this.signer,
+      );
+
+      // Verify that the signer is the owner of the token contract
+
+      const owner = (await tokenContract.owner()) as string;
+      if (owner.toLowerCase() !== this.signer!.address.toLowerCase()) {
+        return {
+          success: false,
+          error: `Admin address ${this.signer!.address} is not the token owner. Token owner: ${owner}`,
+        };
+      }
+
+      // Get token decimals
+
+      const decimals = (await tokenContract.decimals()) as bigint;
+      const amountWithDecimals = amount * BigInt(10 ** Number(decimals));
+
+      // Mint tokens
+      const tx = (await tokenContract.mint(
+        toAddress,
+        amountWithDecimals,
+      )) as ethers.ContractTransactionResponse;
+
+      const txHash = tx.hash;
+      this.logger.log(
+        `Minting ${amountWithDecimals} tokens (${amount} with ${decimals} decimals) to ${toAddress}. TX: ${txHash}`,
+      );
+
+      const receipt = await tx.wait();
+
+      if (!receipt || receipt.status !== 1) {
+        return {
+          success: false,
+          error: 'Mint transaction failed',
+        };
+      }
+
+      this.logger.log(`Token mint successful. TX: ${txHash}`);
+
+      return {
+        success: true,
+        transactionHash: txHash,
+      };
+    } catch (error) {
+      this.logger.error('Error minting tokens:', error);
       return {
         success: false,
         error:

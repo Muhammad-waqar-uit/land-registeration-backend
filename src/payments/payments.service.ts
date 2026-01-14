@@ -177,10 +177,7 @@ export class PaymentsService {
     }
 
     // Process payment on blockchain
-    if (
-      land.blockchainLandId &&
-      this.blockchainService.isContractAvailable()
-    ) {
+    if (land.blockchainLandId && this.blockchainService.isContractAvailable()) {
       try {
         // Get buyer user to get wallet address
         const buyer = await this.userRepository.findOne({

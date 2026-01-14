@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsEnum, MaxLength, IsNumber, IsInt, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  MaxLength,
+  IsNumber,
+  IsInt,
+  Min,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { ProjectStatus } from '../../entities/project.entity';
@@ -10,13 +18,15 @@ export class UpdateProjectDto {
     required: false,
     maxLength: 255,
   })
-  @Transform(({ value }) => {
+  @Transform(({ value }): string | null | undefined => {
     if (value === null || value === undefined) return value;
     return typeof value === 'string' ? value.trim() : String(value).trim();
   })
   @IsOptional()
   @IsString({ message: 'Project name must be a string' })
-  @MaxLength(255, { message: 'Project name must be shorter than or equal to 255 characters' })
+  @MaxLength(255, {
+    message: 'Project name must be shorter than or equal to 255 characters',
+  })
   name?: string;
 
   @ApiProperty({
@@ -38,13 +48,15 @@ export class UpdateProjectDto {
     required: false,
     maxLength: 255,
   })
-  @Transform(({ value }) => {
+  @Transform(({ value }): string | null | undefined => {
     if (value === null || value === undefined) return value;
     return typeof value === 'string' ? value.trim() : String(value).trim();
   })
   @IsOptional()
   @IsString({ message: 'Project location must be a string' })
-  @MaxLength(255, { message: 'Project location must be shorter than or equal to 255 characters' })
+  @MaxLength(255, {
+    message: 'Project location must be shorter than or equal to 255 characters',
+  })
   location?: string;
 
   @ApiProperty({

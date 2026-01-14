@@ -198,7 +198,11 @@ export class BuildersService {
     const builder = user;
 
     // Check if email is being updated and if it's already taken
-    if (updateData.email && builder.email && updateData.email !== builder.email) {
+    if (
+      updateData.email &&
+      builder.email &&
+      updateData.email !== builder.email
+    ) {
       const existingUser = await this.userRepository.findOne({
         where: { email: updateData.email },
       });

@@ -241,7 +241,7 @@ export class LandsService {
     let ipfsHashForBlockchain = '';
     if (ipfsHashFormatted) {
       try {
-        const ipfsData = JSON.parse(ipfsHashFormatted);
+        const ipfsData = JSON.parse(ipfsHashFormatted) as { hash?: string };
         ipfsHashForBlockchain = ipfsData.hash || '';
       } catch {
         // If not JSON, assume it's already just the hash
@@ -454,7 +454,6 @@ export class LandsService {
 
     // Update blockchain if land is registered and changes are made
     let newDocumentHash: string | undefined;
-    let newIpfsHash: string | undefined;
     let newPrice: bigint | undefined;
 
     // Check if document was updated
@@ -474,7 +473,9 @@ export class LandsService {
     let ipfsHashForBlockchainUpdate = '';
     if (ipfsHashFormattedForUpdate) {
       try {
-        const ipfsData = JSON.parse(ipfsHashFormattedForUpdate);
+        const ipfsData = JSON.parse(ipfsHashFormattedForUpdate) as {
+          hash?: string;
+        };
         ipfsHashForBlockchainUpdate = ipfsData.hash || '';
       } catch {
         // If not JSON, assume it's already just the hash
