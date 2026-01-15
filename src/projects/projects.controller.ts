@@ -58,6 +58,12 @@ export class ProjectsController {
         location: { type: 'string', example: 'Downtown Area, City' },
         locationDetails: { type: 'string', example: 'Near Central Park' },
         totalUnits: { type: 'number', example: 50 },
+        status: {
+          type: 'string',
+          enum: ['draft', 'active', 'completed', 'cancelled'],
+          example: 'draft',
+          description: 'Project status (defaults to draft if not provided)',
+        },
         approvalDocuments: {
           type: 'string',
           format: 'binary',
