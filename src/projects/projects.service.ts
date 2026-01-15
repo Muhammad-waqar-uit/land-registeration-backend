@@ -6,10 +6,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Project, ProjectStatus } from '../entities/project.entity';
 import { User, UserRole } from '../entities/user.entity';
-import { Land } from '../entities/land.entity';
+import { Land, LandStatus } from '../entities/land.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
@@ -68,7 +68,16 @@ export class ProjectsService {
       `Project ${savedProject.id} created by builder ${builderId}`,
     );
 
-    return ProjectResponseDto.fromEntity(savedProject);
+    // New project has no lands yet, so counts are 0
+    const projectWithCounts = {
+      ...savedProject,
+      _count: {
+        lands: 0,
+      },
+      soldUnits: 0,
+    };
+
+    return ProjectResponseDto.fromEntity(projectWithCounts);
   }
 
   /**
@@ -105,8 +114,37 @@ export class ProjectsService {
       .orderBy('project.createdAt', 'DESC')
       .getManyAndCount();
 
+    // For each project, calculate lands count and sold units
+    const projectsWithCounts = await Promise.all(
+      projects.map(async (project) => {
+        // Count total lands in this project
+        const landsCount = await this.landRepository.count({
+          where: { projectId: project.id },
+        });
+
+        // Count sold units - lands with status OWNED or SOLD
+        // Using In() operator to check for multiple statuses
+        const soldUnits = await this.landRepository.count({
+          where: {
+            projectId: project.id,
+            status: In([LandStatus.OWNED, LandStatus.SOLD]),
+          },
+        });
+
+        return {
+          ...project,
+          _count: {
+            lands: landsCount,
+          },
+          soldUnits: soldUnits,
+        };
+      }),
+    );
+
     return {
-      data: projects.map((project) => ProjectResponseDto.fromEntity(project)),
+      data: projectsWithCounts.map((project) =>
+        ProjectResponseDto.fromEntity(project),
+      ),
       total,
       page,
       limit,
@@ -129,7 +167,27 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
-    return ProjectResponseDto.fromEntity(project, includeRelations);
+    // Calculate lands count and sold units
+    const landsCount = await this.landRepository.count({
+      where: { projectId: project.id },
+    });
+
+    const soldUnits = await this.landRepository.count({
+      where: {
+        projectId: project.id,
+        status: In([LandStatus.OWNED, LandStatus.SOLD]),
+      },
+    });
+
+    const projectWithCounts = {
+      ...project,
+      _count: {
+        lands: landsCount,
+      },
+      soldUnits: soldUnits,
+    };
+
+    return ProjectResponseDto.fromEntity(projectWithCounts, includeRelations);
   }
 
   /**
@@ -351,7 +409,28 @@ export class ProjectsService {
       this.logger.debug(
         `[UPDATE] Final values: name="${updatedProject.name}", location="${updatedProject.location}", totalUnits=${updatedProject.totalUnits}`,
       );
-      return ProjectResponseDto.fromEntity(updatedProject);
+
+      // Calculate counts for response
+      const landsCount = await this.landRepository.count({
+        where: { projectId: updatedProject.id },
+      });
+
+      const soldUnits = await this.landRepository.count({
+        where: {
+          projectId: updatedProject.id,
+          status: In([LandStatus.OWNED, LandStatus.SOLD]),
+        },
+      });
+
+      const projectWithCounts = {
+        ...updatedProject,
+        _count: {
+          lands: landsCount,
+        },
+        soldUnits: soldUnits,
+      };
+
+      return ProjectResponseDto.fromEntity(projectWithCounts);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -402,7 +481,27 @@ export class ProjectsService {
       `Project ${id} approved by admin ${userId}. Status changed from ${ProjectStatus.PENDING_APPROVAL} to ${ProjectStatus.APPROVED}`,
     );
 
-    return ProjectResponseDto.fromEntity(updatedProject);
+    // Calculate counts for response
+    const landsCount = await this.landRepository.count({
+      where: { projectId: updatedProject.id },
+    });
+
+    const soldUnits = await this.landRepository.count({
+      where: {
+        projectId: updatedProject.id,
+        status: In([LandStatus.OWNED, LandStatus.SOLD]),
+      },
+    });
+
+    const projectWithCounts = {
+      ...updatedProject,
+      _count: {
+        lands: landsCount,
+      },
+      soldUnits: soldUnits,
+    };
+
+    return ProjectResponseDto.fromEntity(projectWithCounts);
   }
 
   /**
@@ -505,7 +604,28 @@ export class ProjectsService {
     }
 
     const updatedProject = await this.projectRepository.save(project);
-    return ProjectResponseDto.fromEntity(updatedProject);
+
+    // Calculate counts for response
+    const landsCount = await this.landRepository.count({
+      where: { projectId: updatedProject.id },
+    });
+
+    const soldUnits = await this.landRepository.count({
+      where: {
+        projectId: updatedProject.id,
+        status: In([LandStatus.OWNED, LandStatus.SOLD]),
+      },
+    });
+
+    const projectWithCounts = {
+      ...updatedProject,
+      _count: {
+        lands: landsCount,
+      },
+      soldUnits: soldUnits,
+    };
+
+    return ProjectResponseDto.fromEntity(projectWithCounts);
   }
 
   /**

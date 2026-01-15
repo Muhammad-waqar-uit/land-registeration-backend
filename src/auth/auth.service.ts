@@ -20,6 +20,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto, UserResponseDto } from './dto/auth-response.dto';
 import { RefreshTokenResponseDto } from './dto/refresh-token.dto';
+import { QueryUsersDto } from './dto/query-users.dto';
+import { UserDetailResponseDto } from './dto/user-detail-response.dto';
 import { EmailService } from '../common/services/email.service';
 import { WalletService } from '../common/services/wallet.service';
 import { BlockchainService } from '../common/services/blockchain.service';
@@ -691,6 +693,48 @@ export class AuthService {
 
     // Return raw token (only time it's visible)
     return rawToken;
+  }
+
+  /**
+   * Get all users with pagination (Admin only)
+   * Returns paginated list of all users in the system with their details
+   */
+  async findAllUsers(query: QueryUsersDto): Promise<{
+    data: UserDetailResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+    offset: number;
+  }> {
+    const { page = 1, limit = 10, offset, role } = query;
+
+    // Calculate offset if not provided (use page-based pagination)
+    const calculatedOffset = offset !== undefined ? offset : (page - 1) * limit;
+
+    const queryBuilder = this.userRepository.createQueryBuilder('user');
+
+    // Apply role filter if provided
+    if (role) {
+      queryBuilder.where('user.role = :role', { role });
+    }
+
+    // Get total count before pagination
+    const total = await queryBuilder.getCount();
+
+    // Apply pagination
+    const users = await queryBuilder
+      .skip(calculatedOffset)
+      .take(limit)
+      .orderBy('user.createdAt', 'DESC')
+      .getMany();
+
+    return {
+      data: users.map((user) => UserDetailResponseDto.fromEntity(user)),
+      total,
+      page,
+      limit,
+      offset: calculatedOffset,
+    };
   }
 
   /**

@@ -108,6 +108,40 @@ export class ProjectsController {
     return this.projectsService.findAll(query);
   }
 
+  @Get('admin/approved')
+  @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: 'Get all approved projects (Admin only) ✅',
+    description:
+      'Retrieve all projects with APPROVED status. Supports pagination with limit and offset.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of approved projects',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ProjectResponseDto' },
+        },
+        total: { type: 'number', example: 50 },
+        page: { type: 'number', example: 1 },
+        limit: { type: 'number', example: 10 },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getAllApprovedProjects(@Query() query: QueryProjectsDto) {
+    // Force approved status filter for admin
+    return this.projectsService.findAll({
+      ...query,
+      status: ProjectStatus.APPROVED,
+    });
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get project by ID ✅' })
   @ApiResponse({

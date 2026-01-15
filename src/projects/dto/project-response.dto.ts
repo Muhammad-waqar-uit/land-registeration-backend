@@ -35,6 +35,14 @@ export class ProjectResponseDto {
   soldUnits: number;
 
   @ApiProperty({
+    description: 'Count of lands/properties in this project',
+    example: { lands: 25 },
+  })
+  _count?: {
+    lands: number;
+  };
+
+  @ApiProperty({
     description: 'Approval documents CID (local storage path)',
     nullable: true,
   })
@@ -73,14 +81,21 @@ export class ProjectResponseDto {
   lands?: LandResponseDto[];
 
   static fromEntity(
-    project: Project,
+    project: Project & { _count?: { lands: number }; soldUnits?: number },
     includeRelations = false,
   ): ProjectResponseDto {
-    const { builder, lands, ...projectResponse } = project;
+    const { builder, lands, _count, soldUnits: calculatedSoldUnits, ...projectResponse } = project;
 
     const response: ProjectResponseDto = {
       ...projectResponse,
+      // Use calculated soldUnits if provided, otherwise fall back to entity soldUnits
+      soldUnits: calculatedSoldUnits ?? project.soldUnits ?? 0,
     };
+
+    // Include _count if provided
+    if (_count) {
+      response._count = _count;
+    }
 
     if (includeRelations) {
       if (builder) {

@@ -7,6 +7,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -34,7 +37,8 @@ import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../entities/user.entity';
 import { UserResponseDto, AuthResponseDto } from './dto/auth-response.dto';
-import { Param, ParseUUIDPipe } from '@nestjs/common';
+import { QueryUsersDto } from './dto/query-users.dto';
+import { UserDetailResponseDto } from './dto/user-detail-response.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -238,6 +242,46 @@ export class AuthController {
     return {
       message: 'Logged out successfully',
     };
+  }
+
+  @Get('users')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get all users with pagination (Admin only) ✅',
+    description:
+      'Retrieve a paginated list of all users in the system with their details. Supports limit, offset, and role filtering.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of users retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/UserDetailResponseDto' },
+        },
+        total: { type: 'number', example: 100 },
+        page: { type: 'number', example: 1 },
+        limit: { type: 'number', example: 10 },
+        offset: { type: 'number', example: 0 },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getAllUsers(
+    @Query() query: QueryUsersDto,
+  ): Promise<{
+    data: UserDetailResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+    offset: number;
+  }> {
+    return this.authService.findAllUsers(query);
   }
 
   @Post('builders/:id/verify')

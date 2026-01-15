@@ -53,6 +53,36 @@ export class LandsController {
     return this.landsService.findAll(query);
   }
 
+  @Get('admin/all')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Get all lands/properties (Admin only) ✅',
+    description:
+      'Retrieve all lands/properties in the system. Supports pagination with limit and offset, and various filters.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all lands/properties',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/LandResponseDto' },
+        },
+        total: { type: 'number', example: 200 },
+        page: { type: 'number', example: 1 },
+        limit: { type: 'number', example: 10 },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getAllLands(@Query() query: QueryLandsDto) {
+    return this.landsService.findAll(query);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get property details' })
   @ApiResponse({
