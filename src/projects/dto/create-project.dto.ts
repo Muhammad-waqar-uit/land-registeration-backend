@@ -6,11 +6,9 @@ import {
   IsNumber,
   IsInt,
   Min,
-  IsEnum,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ProjectStatus } from '../../entities/project.entity';
 
 export class CreateProjectDto {
   @ApiProperty({
@@ -88,17 +86,4 @@ export class CreateProjectDto {
   @IsInt({ message: 'Total units must be an integer' })
   @Min(0, { message: 'Total units must be greater than or equal to 0' })
   totalUnits?: number;
-
-  @ApiProperty({
-    description: 'Project status',
-    enum: ProjectStatus,
-    example: ProjectStatus.DRAFT,
-    required: false,
-    default: ProjectStatus.DRAFT,
-  })
-  @IsOptional()
-  @IsEnum(ProjectStatus, {
-    message: 'Status must be one of: draft, active, completed, cancelled',
-  })
-  status?: ProjectStatus;
 }

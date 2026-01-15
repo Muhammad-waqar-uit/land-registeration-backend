@@ -12,10 +12,10 @@ import { User } from './user.entity';
 import { Land } from './land.entity';
 
 export enum ProjectStatus {
-  DRAFT = 'draft',
+  PENDING_APPROVAL = 'pending_approval',
+  APPROVED = 'approved',
   ACTIVE = 'active',
   COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
 }
 
 @Entity('projects')
@@ -38,7 +38,7 @@ export class Project {
   @Column({
     type: 'enum',
     enum: ProjectStatus,
-    default: ProjectStatus.DRAFT,
+    default: ProjectStatus.PENDING_APPROVAL,
   })
   status: ProjectStatus;
 

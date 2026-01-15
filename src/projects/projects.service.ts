@@ -60,6 +60,7 @@ export class ProjectsService {
       ...createProjectDto,
       builderId,
       totalUnits: createProjectDto.totalUnits || 0,
+      status: ProjectStatus.PENDING_APPROVAL,
     });
 
     const savedProject = await this.projectRepository.save(project);
@@ -139,6 +140,52 @@ export class ProjectsService {
   }
 
   /**
+   * Get project approval + land-creation gating status (used by frontend)
+   */
+  async getApprovalStatus(id: string): Promise<{
+    projectId: string;
+    status: ProjectStatus;
+    isApproved: boolean;
+    canCreateLands: boolean;
+    totalUnits: number;
+    landsCount: number;
+    remainingUnits: number;
+  }> {
+    const project = await this.projectRepository.findOne({
+      where: { id },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const landsCount = await this.landRepository.count({
+      where: { projectId: id },
+    });
+
+    const isApproved = project.status === ProjectStatus.APPROVED;
+    const totalUnits = project.totalUnits;
+    const remainingUnits = Math.max(0, totalUnits - landsCount);
+
+    // Mirrors land creation rules in LandsService:
+    // - must be approved
+    // - totalUnits must be >= 1
+    // - landsCount must be < totalUnits
+    const canCreateLands =
+      isApproved && totalUnits >= 1 && landsCount < totalUnits;
+
+    return {
+      projectId: project.id,
+      status: project.status,
+      isApproved,
+      canCreateLands,
+      totalUnits,
+      landsCount,
+      remainingUnits,
+    };
+  }
+
+  /**
    * Update project (Builder/Owner or Admin)
    */
   async update(
@@ -179,12 +226,9 @@ export class ProjectsService {
 
     this.logger.log(`[UPDATE] Permission check passed`);
 
-    // Check if project can be updated (not completed or cancelled)
+    // Check if project can be updated (not completed)
     if (userRole !== UserRole.ADMIN) {
-      if (
-        project.status === ProjectStatus.COMPLETED ||
-        project.status === ProjectStatus.CANCELLED
-      ) {
+      if (project.status === ProjectStatus.COMPLETED) {
         this.logger.warn(
           `[UPDATE] FAILED - Cannot update project with status "${project.status}"`,
         );
@@ -321,6 +365,47 @@ export class ProjectsService {
   }
 
   /**
+   * Approve project (Admin only)
+   */
+  async approveProject(
+    id: string,
+    userId: string,
+    userRole: UserRole,
+  ): Promise<ProjectResponseDto> {
+    // Only admins can approve projects
+    if (userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('Only admins can approve projects');
+    }
+
+    const project = await this.projectRepository.findOne({
+      where: { id },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    // Check if project is already approved or completed
+    if (project.status === ProjectStatus.APPROVED) {
+      throw new BadRequestException('Project is already approved');
+    }
+
+    if (project.status === ProjectStatus.COMPLETED) {
+      throw new BadRequestException('Cannot approve a completed project');
+    }
+
+    // Update status to approved
+    project.status = ProjectStatus.APPROVED;
+    const updatedProject = await this.projectRepository.save(project);
+
+    this.logger.log(
+      `Project ${id} approved by admin ${userId}. Status changed from ${ProjectStatus.PENDING_APPROVAL} to ${ProjectStatus.APPROVED}`,
+    );
+
+    return ProjectResponseDto.fromEntity(updatedProject);
+  }
+
+  /**
    * Delete project (Builder/Owner or Admin)
    */
   async remove(id: string, userId: string, userRole: UserRole): Promise<void> {
@@ -339,17 +424,15 @@ export class ProjectsService {
       );
     }
 
-    // Check if project has properties
-    if (userRole !== UserRole.ADMIN) {
-      const propertiesCount = await this.landRepository.count({
-        where: { projectId: id },
-      });
+    // Check if project has properties (lands). If yes, project cannot be deleted by anyone.
+    const propertiesCount = await this.landRepository.count({
+      where: { projectId: id },
+    });
 
-      if (propertiesCount > 0) {
-        throw new BadRequestException(
-          'Cannot delete project with existing properties. Delete properties first.',
-        );
-      }
+    if (propertiesCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete project with existing properties. Delete properties first.',
+      );
     }
 
     await this.projectRepository.remove(project);

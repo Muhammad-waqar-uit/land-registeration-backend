@@ -34,6 +34,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../entities/user.entity';
+import { ProjectStatus } from '../entities/project.entity';
 
 @ApiTags('Projects')
 @Controller('projects')
@@ -58,12 +59,6 @@ export class ProjectsController {
         location: { type: 'string', example: 'Downtown Area, City' },
         locationDetails: { type: 'string', example: 'Near Central Park' },
         totalUnits: { type: 'number', example: 50 },
-        status: {
-          type: 'string',
-          enum: ['draft', 'active', 'completed', 'cancelled'],
-          example: 'draft',
-          description: 'Project status (defaults to draft if not provided)',
-        },
         approvalDocuments: {
           type: 'string',
           format: 'binary',
@@ -127,6 +122,42 @@ export class ProjectsController {
     return this.projectsService.findOne(id);
   }
 
+  @Get(':id/approval-status')
+  @ApiOperation({
+    summary: 'Get project approval + land creation gating status ✅',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns project status and whether lands can be created (approved + unit cap).',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string', example: 'uuid' },
+            status: {
+              type: 'string',
+              enum: Object.values(ProjectStatus),
+              example: ProjectStatus.PENDING_APPROVAL,
+            },
+            isApproved: { type: 'boolean', example: false },
+            canCreateLands: { type: 'boolean', example: false },
+            totalUnits: { type: 'number', example: 50 },
+            landsCount: { type: 'number', example: 0 },
+            remainingUnits: { type: 'number', example: 50 },
+          },
+        },
+        success: { type: 'boolean', example: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async getApprovalStatus(@Param('id', ParseUUIDPipe) id: string) {
+    return this.projectsService.getApprovalStatus(id);
+  }
+
   @Get(':id/properties')
   @ApiOperation({ summary: 'Get all properties in project ✅' })
   @ApiResponse({
@@ -157,7 +188,7 @@ export class ProjectsController {
         totalUnits: { type: 'number', example: 50 },
         status: {
           type: 'string',
-          enum: ['draft', 'active', 'completed', 'cancelled'],
+          enum: ['pending_approval', 'approved', 'active', 'completed'],
         },
       },
     },
@@ -248,6 +279,24 @@ export class ProjectsController {
     @CurrentUser() user: User,
   ): Promise<void> {
     return this.projectsService.remove(id, user.id, user.role);
+  }
+
+  @Patch(':id/approve')
+  @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @ApiOperation({ summary: 'Approve project (Admin only) ✅' })
+  @ApiResponse({
+    status: 200,
+    description: 'Project approved successfully',
+    type: ProjectResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Admin only' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async approveProject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<ProjectResponseDto> {
+    return this.projectsService.approveProject(id, user.id, user.role);
   }
 
   @Get(':id/verify')

@@ -27,6 +27,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { User, UserRole } from '../entities/user.entity';
 import { QueryPropertyRequestsDto } from '../property-requests/dto/query-property-requests.dto';
+import { ProjectResponseDto } from '../projects/dto/project-response.dto';
 
 @ApiTags('Builders')
 @Controller('builders')
@@ -193,6 +194,7 @@ export class BuildersController {
   @ApiResponse({
     status: 200,
     description: "List of builder's projects",
+    type: [ProjectResponseDto],
   })
   async getBuilderProjects(@CurrentUser() user: User) {
     return this.buildersService.getBuilderProjects(user.id);

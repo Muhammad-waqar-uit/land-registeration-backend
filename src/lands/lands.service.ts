@@ -9,7 +9,7 @@ import { Repository } from 'typeorm';
 import { Land, LandStatus } from '../entities/land.entity';
 import { Payment, PaymentStatus } from '../entities/payment.entity';
 import { User, UserRole } from '../entities/user.entity';
-import { Project } from '../entities/project.entity';
+import { Project, ProjectStatus } from '../entities/project.entity';
 import { CreateLandDto } from './dto/create-land.dto';
 import { UpdateLandDto } from './dto/update-land.dto';
 import { QueryLandsDto } from './dto/query-lands.dto';
@@ -164,6 +164,31 @@ export class LandsService {
     // Verify project belongs to this builder
     if (project.builderId !== builderId) {
       throw new ForbiddenException('Project does not belong to this builder');
+    }
+
+    // Verify project is approved before allowing land creation
+    if (project.status !== ProjectStatus.APPROVED) {
+      throw new BadRequestException(
+        `Cannot create properties for this project. Project must be approved by admin. Current status: ${project.status}`,
+      );
+    }
+
+    // Enforce project unit limit: project.totalUnits must be defined (> 0),
+    // and you cannot create more lands than totalUnits.
+    if (!project.totalUnits || project.totalUnits <= 0) {
+      throw new BadRequestException(
+        'Cannot create property: project totalUnits must be defined (>= 1) before adding properties.',
+      );
+    }
+
+    const existingUnitsCount = await this.landRepository.count({
+      where: { projectId: project.id },
+    });
+
+    if (existingUnitsCount >= project.totalUnits) {
+      throw new BadRequestException(
+        `Cannot create more properties for this project. Project totalUnits is ${project.totalUnits} and ${existingUnitsCount} properties already exist.`,
+      );
     }
 
     let documentCID: string | undefined;
