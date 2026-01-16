@@ -104,8 +104,16 @@ export class PropertyRequestResponseDto {
   })
   property?: PropertyDto;
 
+  @ApiProperty({
+    description: 'Agreement ID if agreement exists for this request',
+    example: 'uuid',
+    nullable: true,
+    required: false,
+  })
+  agreementId?: string | null;
+
   static fromEntity(
-    request: PropertyRequest & { buyer?: User; property?: Land },
+    request: PropertyRequest & { buyer?: User; property?: Land; agreementId?: string | null },
   ): PropertyRequestResponseDto {
     const dto: PropertyRequestResponseDto = {
       id: request.id,
@@ -139,6 +147,11 @@ export class PropertyRequestResponseDto {
         status: request.property.status,
         size: request.property.size,
       };
+    }
+
+    // Include agreement ID if provided
+    if (request.agreementId !== undefined) {
+      dto.agreementId = request.agreementId;
     }
 
     return dto;

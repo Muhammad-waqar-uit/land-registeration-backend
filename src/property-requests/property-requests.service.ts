@@ -13,6 +13,7 @@ import {
 } from '../entities/property-request.entity';
 import { Land, LandStatus } from '../entities/land.entity';
 import { User } from '../entities/user.entity';
+import { Agreement } from '../entities/agreement.entity';
 import { CreatePropertyRequestDto } from './dto/create-property-request.dto';
 import { RespondPropertyRequestDto } from './dto/respond-property-request.dto';
 import { QueryPropertyRequestsDto } from './dto/query-property-requests.dto';
@@ -28,8 +29,49 @@ export class PropertyRequestsService {
     private landRepository: Repository<Land>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Agreement)
+    private agreementRepository: Repository<Agreement>,
     private landsService: LandsService,
   ) {}
+
+  /**
+   * Helper method to get agreement ID for a property request
+   */
+  private async getAgreementIdForRequest(
+    propertyId: string,
+    buyerId: string,
+  ): Promise<string | null> {
+    const agreement = await this.agreementRepository.findOne({
+      where: {
+        propertyId,
+        buyerId,
+      },
+      select: ['id'],
+      order: { createdAt: 'DESC' }, // Get the most recent agreement
+    });
+
+    return agreement?.id || null;
+  }
+
+  /**
+   * Helper method to add agreement IDs to property requests
+   */
+  private async addAgreementIdsToRequests(
+    requests: PropertyRequest[],
+  ): Promise<(PropertyRequest & { agreementId: string | null })[]> {
+    return Promise.all(
+      requests.map(async (request) => {
+        const agreementId = await this.getAgreementIdForRequest(
+          request.propertyId,
+          request.buyerId,
+        );
+        return {
+          ...request,
+          agreementId,
+        };
+      }),
+    );
+  }
 
   /**
    * Step 5.2 Flow Step 1: Create purchase request (buyer action)
@@ -239,8 +281,11 @@ export class PropertyRequestsService {
       .orderBy('request.createdAt', 'DESC')
       .getManyAndCount();
 
+    // Get agreement IDs for each request
+    const requestsWithAgreements = await this.addAgreementIdsToRequests(requests);
+
     return {
-      data: requests.map((request) =>
+      data: requestsWithAgreements.map((request) =>
         PropertyRequestResponseDto.fromEntity(request),
       ),
       total,
@@ -401,8 +446,11 @@ export class PropertyRequestsService {
       .orderBy('request.createdAt', 'DESC')
       .getManyAndCount();
 
+    // Get agreement IDs for each request
+    const requestsWithAgreements = await this.addAgreementIdsToRequests(requests);
+
     return {
-      data: requests.map((request) =>
+      data: requestsWithAgreements.map((request) =>
         PropertyRequestResponseDto.fromEntity(request),
       ),
       total,
@@ -450,8 +498,11 @@ export class PropertyRequestsService {
       .orderBy('request.createdAt', 'DESC')
       .getManyAndCount();
 
+    // Get agreement IDs for each request
+    const requestsWithAgreements = await this.addAgreementIdsToRequests(requests);
+
     return {
-      data: requests.map((request) =>
+      data: requestsWithAgreements.map((request) =>
         PropertyRequestResponseDto.fromEntity(request),
       ),
       total,
@@ -473,7 +524,16 @@ export class PropertyRequestsService {
       throw new NotFoundException('Property request not found');
     }
 
-    return PropertyRequestResponseDto.fromEntity(request);
+    // Get agreement ID for this request
+    const agreementId = await this.getAgreementIdForRequest(
+      request.propertyId,
+      request.buyerId,
+    );
+
+    return PropertyRequestResponseDto.fromEntity({
+      ...request,
+      agreementId,
+    });
   }
 
   /**

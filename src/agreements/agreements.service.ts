@@ -946,8 +946,9 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
 
   /**
    * Find one agreement by ID
+   * Users can only access agreements where they are the buyer or builder
    */
-  async findOne(id: string): Promise<AgreementResponseDto> {
+  async findOne(id: string, userId?: string): Promise<AgreementResponseDto> {
     const agreement = await this.agreementRepository.findOne({
       where: { id },
       relations: ['property', 'buyer', 'builder'],
@@ -955,6 +956,23 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
 
     if (!agreement) {
       throw new NotFoundException('Agreement not found');
+    }
+
+    // If userId is provided, check authorization
+    if (userId) {
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Allow access if user is buyer, builder, or admin
+      if (
+        agreement.buyerId !== userId &&
+        agreement.builderId !== userId &&
+        user.role !== UserRole.ADMIN
+      ) {
+        throw new NotFoundException('Agreement not found'); // Return 404 instead of 403 for security
+      }
     }
 
     return AgreementResponseDto.fromEntity(agreement);

@@ -94,8 +94,9 @@ export class AgreementsController {
   @ApiResponse({ status: 404, description: 'Agreement not found' })
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
   ): Promise<AgreementResponseDto> {
-    return this.agreementsService.findOne(id);
+    return this.agreementsService.findOne(id, user.id);
   }
 
   @Post(':id/sign')

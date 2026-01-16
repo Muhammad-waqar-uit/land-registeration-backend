@@ -17,6 +17,7 @@ import { PropertyRequestsModule } from './property-requests/property-requests.mo
 import { ResaleRequestsModule } from './resale-requests/resale-requests.module';
 import { InstallmentsModule } from './installments/installments.module';
 import { TokensModule } from './tokens/tokens.module';
+import { BuyersModule } from './buyers/buyers.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { TokensModule } from './tokens/tokens.module';
     ResaleRequestsModule,
     InstallmentsModule,
     TokensModule,
+    BuyersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
