@@ -100,19 +100,24 @@ export class AgreementsService {
     }
 
     // Check if agreement already exists for this property and buyer
-    const existingAgreement = await this.agreementRepository.findOne({
-      where: {
-        propertyId: createAgreementDto.propertyId,
-        buyerId: createAgreementDto.buyerId,
-        agreementType: createAgreementDto.agreementType,
-        status: AgreementStatus.DRAFT,
-      },
-    });
+    // For INITIAL agreements, check for any existing INITIAL agreement (not just DRAFT)
+    // For FINAL_OWNERSHIP, allow multiple (created during ownership transfer)
+    if (createAgreementDto.agreementType === AgreementType.INITIAL) {
+      const existingAgreement = await this.agreementRepository.findOne({
+        where: {
+          propertyId: createAgreementDto.propertyId,
+          buyerId: createAgreementDto.buyerId,
+          agreementType: AgreementType.INITIAL,
+          // Check for any status except COMPLETED (allow final ownership agreement)
+        },
+        order: { createdAt: 'DESC' },
+      });
 
-    if (existingAgreement) {
-      throw new BadRequestException(
-        'A draft agreement already exists for this property and buyer',
-      );
+      if (existingAgreement && existingAgreement.status !== AgreementStatus.COMPLETED) {
+        throw new BadRequestException(
+          `An agreement already exists for this property and buyer (Status: ${existingAgreement.status}). Please use the existing agreement or wait for it to be completed.`,
+        );
+      }
     }
 
     // Prepare agreement terms
