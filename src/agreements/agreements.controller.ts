@@ -142,6 +142,32 @@ export class AgreementsController {
     return this.agreementsService.transferOwnership(id, user.id);
   }
 
+  @Post(':id/transfer-ownership')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({
+    summary: 'Transfer ownership to buyer after all payments completed (Builder only) ✅',
+    description:
+      'Transfers property ownership from builder to buyer after all payments are completed. Generates final ownership document, uploads to IPFS, stores on blockchain, and updates property ownership.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ownership successfully transferred',
+    type: AgreementResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Payments not completed or agreement not signed',
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Builder only' })
+  @ApiResponse({ status: 404, description: 'Agreement not found' })
+  transferOwnership(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<AgreementResponseDto> {
+    return this.agreementsService.transferOwnership(id, user.id);
+  }
+
   @Post(':id/upload-signed')
   @UseInterceptors(FileInterceptor('document'))
   @ApiConsumes('multipart/form-data')

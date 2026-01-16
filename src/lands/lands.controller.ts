@@ -32,6 +32,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../entities/user.entity';
+import { LandStatus } from '../entities/land.entity';
 
 @ApiTags('Properties', 'Lands')
 @Controller(['properties', 'lands']) // Support both routes for backward compatibility
@@ -51,6 +52,41 @@ export class LandsController {
   })
   findAll(@Query() query: QueryLandsDto) {
     return this.landsService.findAll(query);
+  }
+
+  @Get('my-properties')
+  @ApiOperation({
+    summary: "Get buyer's owned properties ✅",
+    description:
+      "Get all properties owned by the authenticated buyer. Automatically filters by current user's ID and status 'owned'.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "List of buyer's owned properties",
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/LandResponseDto' },
+        },
+        total: { type: 'number', example: 5 },
+        page: { type: 'number', example: 1 },
+        limit: { type: 'number', example: 10 },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getMyProperties(
+    @Query() query: QueryLandsDto,
+    @CurrentUser() user: User,
+  ) {
+    // Automatically filter by current user's ID and owned status
+    return this.landsService.findAll({
+      ...query,
+      ownerId: user.id,
+      status: LandStatus.OWNED,
+    });
   }
 
   @Get('admin/all')
