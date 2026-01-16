@@ -49,10 +49,16 @@ export class BuyersService {
       );
     }
 
-    // Get all properties owned by builder
+    // Get all properties owned by builder OR originally owned by builder (completed sales)
+    // This includes:
+    // 1. Properties currently owned by builder (ownerId = builderId)
+    // 2. Properties originally owned by builder but now owned by buyer (originalOwnerId = builderId, status = OWNED)
     const builderPropertiesQuery = this.landRepository
       .createQueryBuilder('land')
-      .where('land.ownerId = :builderId', { builderId });
+      .where('(land.ownerId = :builderId OR (land.originalOwnerId = :builderId AND land.status = :ownedStatus))', {
+        builderId,
+        ownedStatus: LandStatus.OWNED,
+      });
 
     // Apply project filter if provided
     if (query.projectId) {
@@ -62,7 +68,7 @@ export class BuyersService {
     }
 
     const builderProperties = await builderPropertiesQuery
-      .select(['land.id', 'land.projectId'])
+      .select(['land.id', 'land.projectId', 'land.ownerId', 'land.originalOwnerId', 'land.status'])
       .getMany();
 
     const propertyIds = builderProperties.map((p) => p.id);
@@ -89,13 +95,14 @@ export class BuyersService {
     }
 
     // Get all payments for builder's properties with relations
+    // Include payments for properties originally owned by builder (even if now owned by buyer)
     const paymentsQuery = this.paymentRepository
       .createQueryBuilder('payment')
       .innerJoin('payment.land', 'land')
       .innerJoin('payment.buyer', 'buyer')
       .leftJoin('payment.agreement', 'agreement')
       .leftJoin('land.project', 'project')
-      .where('land.ownerId = :builderId', { builderId })
+      .where('(land.ownerId = :builderId OR land.originalOwnerId = :builderId)', { builderId })
       .andWhere('land.id IN (:...propertyIds)', { propertyIds })
       .leftJoinAndSelect('payment.land', 'landData')
       .leftJoinAndSelect('payment.buyer', 'buyerData')
@@ -113,12 +120,13 @@ export class BuyersService {
     const payments = await paymentsQuery.getMany();
 
     // Also get property requests for reserved status (no payments yet)
+    // Include requests for properties originally owned by builder
     const propertyRequestsQuery = this.propertyRequestRepository
       .createQueryBuilder('request')
       .innerJoin('request.property', 'property')
       .innerJoin('request.buyer', 'buyer')
       .leftJoin('property.project', 'project')
-      .where('property.ownerId = :builderId', { builderId })
+      .where('(property.ownerId = :builderId OR property.originalOwnerId = :builderId)', { builderId })
       .andWhere('property.id IN (:...propertyIds)', { propertyIds })
       .andWhere('request.status = :status', {
         status: PropertyRequestStatus.PENDING,
@@ -224,8 +232,14 @@ export class BuyersService {
       // Update remaining balance
       progress.remainingBalance = progress.landPrice - progress.totalPaid;
 
-      // Update status based on payments and agreement
-      if (progress.remainingBalance <= 0) {
+      // Update status based on payments, agreement, and property status
+      // Check if property is OWNED (ownership transferred) - this means completed
+      const currentProperty = payment.land;
+      if (currentProperty.status === LandStatus.OWNED && currentProperty.ownerId !== builderId) {
+        // Property is owned by buyer - ownership transferred, so it's completed
+        progress.status = 'completed';
+        progress.remainingBalance = 0;
+      } else if (progress.remainingBalance <= 0) {
         progress.status = 'completed';
         progress.remainingBalance = 0;
       } else if (progress.totalPaid > 0 || progress.pendingPayments > 0) {
@@ -299,15 +313,17 @@ export class BuyersService {
     }
 
     // Also get agreements that are signed but have no payments yet
+    // Also get COMPLETED agreements for owned properties
     const agreementsQuery = this.agreementRepository
       .createQueryBuilder('agreement')
       .innerJoin('agreement.property', 'property')
       .innerJoin('agreement.buyer', 'buyer')
       .leftJoin('property.project', 'project')
-      .where('property.ownerId = :builderId', { builderId })
+      .where('(property.ownerId = :builderId OR property.originalOwnerId = :builderId)', { builderId })
       .andWhere('property.id IN (:...propertyIds)', { propertyIds })
-      .andWhere('agreement.status = :status', {
-        status: AgreementStatus.SIGNED,
+      .andWhere('(agreement.status = :signedStatus OR agreement.status = :completedStatus)', {
+        signedStatus: AgreementStatus.SIGNED,
+        completedStatus: AgreementStatus.COMPLETED,
       })
       .leftJoinAndSelect('agreement.property', 'propertyData')
       .leftJoinAndSelect('agreement.buyer', 'buyerData')
@@ -327,28 +343,72 @@ export class BuyersService {
 
     const agreements = await agreementsQuery.getMany();
 
-    // Add agreements that have no payments
+    // Add agreements that have no payments (or completed agreements)
     for (const agreement of agreements) {
       const key = `${agreement.buyerId}_${agreement.propertyId}`;
 
-      // Only add if no payments exist for this buyer-property
-      if (!progressMap.has(key)) {
-        const property = agreement.property;
-        const buyer = agreement.buyer;
+      const property = agreement.property;
+      const buyer = agreement.buyer;
 
-        if (!property || !buyer) {
-          continue;
-        }
+      if (!property || !buyer) {
+        continue;
+      }
 
-        // Get property request for reservation date
-        const propertyRequest = await this.propertyRequestRepository.findOne({
+      // Get property request for reservation date
+      const propertyRequest = await this.propertyRequestRepository.findOne({
+        where: {
+          propertyId: agreement.propertyId,
+          buyerId: agreement.buyerId,
+        },
+        order: { createdAt: 'ASC' },
+      });
+
+      // If agreement is COMPLETED, check if property is OWNED and calculate final payment status
+      if (agreement.status === AgreementStatus.COMPLETED) {
+        // For completed agreements, property should be fully paid
+        const allPayments = await this.paymentRepository.find({
           where: {
-            propertyId: agreement.propertyId,
+            landId: agreement.propertyId,
             buyerId: agreement.buyerId,
+            status: PaymentStatus.VERIFIED,
           },
-          order: { createdAt: 'ASC' },
         });
 
+        const totalPaid = allPayments.reduce(
+          (sum, p) => sum + parseFloat(p.amount.toString()),
+          0,
+        );
+
+        progressMap.set(key, {
+          buyerId: agreement.buyerId,
+          buyerName: buyer.name,
+          buyerEmail: buyer.email,
+          buyerPhone: buyer.phoneNumber,
+          landId: agreement.propertyId,
+          landTitle: property.title,
+          landLocation: property.location,
+          landPrice: parseFloat(property.price.toString()),
+          projectId: property.projectId || null,
+          projectName: property.project?.name || null,
+          totalPaid,
+          remainingBalance: 0, // Completed means fully paid
+          pendingPayments: 0,
+          verifiedPayments: allPayments.length,
+          lastPaymentDate: allPayments.length > 0
+            ? allPayments.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0].createdAt
+            : null,
+          lastPaymentAmount: allPayments.length > 0
+            ? parseFloat(allPayments.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0].amount.toString())
+            : null,
+          status: 'completed', // Completed agreement means ownership transferred
+          agreementId: agreement.id,
+          agreementStatus: agreement.status,
+          reservationDate: propertyRequest?.createdAt || agreement.createdAt,
+          createdAt: propertyRequest?.createdAt || agreement.createdAt,
+          updatedAt: agreement.updatedAt,
+        });
+      } else if (!progressMap.has(key)) {
+        // Only add signed agreements if no payments exist for this buyer-property
         progressMap.set(key, {
           buyerId: agreement.buyerId,
           buyerName: buyer.name,
