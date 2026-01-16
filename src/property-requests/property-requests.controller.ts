@@ -89,12 +89,25 @@ export class PropertyRequestsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
   @ApiOperation({
-    summary: "Get builder's pending property requests (Builder only)",
+    summary: "Get builder's pending property requests (Builder only) ✅",
+    description:
+      "Get only pending property requests for builder's properties. For all statuses, use /builder/all endpoint.",
   })
   @ApiResponse({
     status: 200,
     description: "List of pending property requests for builder's properties",
-    type: [PropertyRequestResponseDto],
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/PropertyRequestResponseDto' },
+        },
+        total: { type: 'number', example: 5 },
+        page: { type: 'number', example: 1 },
+        limit: { type: 'number', example: 10 },
+      },
+    },
   })
   findPendingRequests(
     @Query() query: QueryPropertyRequestsDto,
@@ -106,12 +119,93 @@ export class PropertyRequestsController {
     );
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get property request by ID' })
+  @Get('builder/all')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({
+    summary: "Get all property requests for builder's properties (Builder only) ✅",
+    description:
+      "Get all property requests (pending, approved, rejected, cancelled) for builder's properties. Supports status filtering via query parameter.",
+  })
   @ApiResponse({
     status: 200,
-    description: 'Property request details',
-    type: PropertyRequestResponseDto,
+    description:
+      "List of all property requests for builder's properties with buyer and property details",
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/PropertyRequestResponseDto' },
+        },
+        total: { type: 'number', example: 20 },
+        page: { type: 'number', example: 1 },
+        limit: { type: 'number', example: 10 },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Builder only' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findBuilderAllRequests(
+    @Query() query: QueryPropertyRequestsDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.propertyRequestsService.findBuilderRequests(user.id, query);
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get property request by ID ✅',
+    description:
+      'Get a single property request by ID. Returns buyer and property details populated.',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Property request details with buyer and property information populated',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', example: 'uuid' },
+        propertyId: { type: 'string', example: 'uuid' },
+        buyerId: { type: 'string', example: 'uuid' },
+        status: {
+          type: 'string',
+          enum: ['pending', 'approved', 'rejected', 'cancelled'],
+        },
+        requestedPrice: { type: 'number', example: 240000.0, nullable: true },
+        builderResponse: { type: 'string', nullable: true },
+        respondedAt: { type: 'string', format: 'date-time', nullable: true },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+        buyer: {
+          type: 'object',
+          description: 'Buyer information (REQUIRED - populated)',
+          properties: {
+            id: { type: 'string', example: 'uuid' },
+            name: { type: 'string', example: 'John Doe' },
+            email: { type: 'string', example: 'john@example.com' },
+            walletAddress: {
+              type: 'string',
+              example: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+              nullable: true,
+            },
+          },
+        },
+        property: {
+          type: 'object',
+          description: 'Property information (REQUIRED - populated)',
+          properties: {
+            id: { type: 'string', example: 'uuid' },
+            title: { type: 'string', example: 'Beachfront Property Unit A-101' },
+            location: { type: 'string', example: '123 Ocean Drive, Miami, FL' },
+            price: { type: 'number', example: 250000.0 },
+            size: { type: 'number', example: 500.5 },
+            status: { type: 'string', example: 'reserved' },
+          },
+        },
+      },
+    },
   })
   @ApiResponse({ status: 404, description: 'Property request not found' })
   findOne(

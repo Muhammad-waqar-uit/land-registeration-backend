@@ -218,6 +218,11 @@ export class PropertyRequestsService {
     const queryBuilder =
       this.propertyRequestRepository.createQueryBuilder('request');
 
+    // Load relations: buyer and property
+    queryBuilder
+      .leftJoinAndSelect('request.buyer', 'buyer')
+      .leftJoinAndSelect('request.property', 'property');
+
     queryBuilder.where('request.buyerId = :buyerId', { buyerId });
 
     if (status) {
@@ -277,6 +282,11 @@ export class PropertyRequestsService {
 
     const queryBuilder =
       this.propertyRequestRepository.createQueryBuilder('request');
+
+    // Load relations: buyer and property
+    queryBuilder
+      .leftJoinAndSelect('request.buyer', 'buyer')
+      .leftJoinAndSelect('request.property', 'property');
 
     queryBuilder.where('request.propertyId IN (:...propertyIds)', {
       propertyIds,
@@ -354,6 +364,11 @@ export class PropertyRequestsService {
     const queryBuilder =
       this.propertyRequestRepository.createQueryBuilder('request');
 
+    // Load relations: buyer and property
+    queryBuilder
+      .leftJoinAndSelect('request.buyer', 'buyer')
+      .leftJoinAndSelect('request.property', 'property');
+
     queryBuilder.where('request.propertyId IN (:...propertyIds)', {
       propertyIds,
     });
@@ -409,6 +424,11 @@ export class PropertyRequestsService {
 
     const queryBuilder =
       this.propertyRequestRepository.createQueryBuilder('request');
+
+    // Load relations: buyer and property
+    queryBuilder
+      .leftJoinAndSelect('request.buyer', 'buyer')
+      .leftJoinAndSelect('request.property', 'property');
 
     if (status) {
       queryBuilder.where('request.status = :status', { status });

@@ -1,3 +1,4 @@
+import { IsBoolean, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SignAgreementDto {
@@ -5,6 +6,9 @@ export class SignAgreementDto {
     description: 'Signature confirmation (user confirms they are signing)',
     example: true,
     default: true,
+    required: false,
   })
-  confirmed: boolean = true;
+  @IsOptional()
+  @IsBoolean()
+  confirmed?: boolean = true;
 }
