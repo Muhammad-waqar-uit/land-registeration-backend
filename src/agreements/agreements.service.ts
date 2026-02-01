@@ -113,7 +113,10 @@ export class AgreementsService {
         order: { createdAt: 'DESC' },
       });
 
-      if (existingAgreement && existingAgreement.status !== AgreementStatus.COMPLETED) {
+      if (
+        existingAgreement &&
+        existingAgreement.status !== AgreementStatus.COMPLETED
+      ) {
         throw new BadRequestException(
           `An agreement already exists for this property and buyer (Status: ${existingAgreement.status}). Please use the existing agreement or wait for it to be completed.`,
         );

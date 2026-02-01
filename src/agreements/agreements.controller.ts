@@ -146,7 +146,8 @@ export class AgreementsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
   @ApiOperation({
-    summary: 'Transfer ownership to buyer after all payments completed (Builder only) ✅',
+    summary:
+      'Transfer ownership to buyer after all payments completed (Builder only) ✅',
     description:
       'Transfers property ownership from builder to buyer after all payments are completed. Generates final ownership document, uploads to IPFS, stores on blockchain, and updates property ownership.',
   })

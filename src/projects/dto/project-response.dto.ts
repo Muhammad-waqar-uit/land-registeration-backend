@@ -84,7 +84,13 @@ export class ProjectResponseDto {
     project: Project & { _count?: { lands: number }; soldUnits?: number },
     includeRelations = false,
   ): ProjectResponseDto {
-    const { builder, lands, _count, soldUnits: calculatedSoldUnits, ...projectResponse } = project;
+    const {
+      builder,
+      lands,
+      _count,
+      soldUnits: calculatedSoldUnits,
+      ...projectResponse
+    } = project;
 
     const response: ProjectResponseDto = {
       ...projectResponse,

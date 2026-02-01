@@ -4,10 +4,16 @@ import { Repository } from 'typeorm';
 import { Payment, PaymentStatus } from '../entities/payment.entity';
 import { Land, LandStatus } from '../entities/land.entity';
 import { Agreement, AgreementStatus } from '../entities/agreement.entity';
-import { PropertyRequest, PropertyRequestStatus } from '../entities/property-request.entity';
+import {
+  PropertyRequest,
+  PropertyRequestStatus,
+} from '../entities/property-request.entity';
 import { User, UserRole } from '../entities/user.entity';
 import { Project } from '../entities/project.entity';
-import { QueryBuyerProgressDto, BuyerProgressStatus } from './dto/query-buyer-progress.dto';
+import {
+  QueryBuyerProgressDto,
+  BuyerProgressStatus,
+} from './dto/query-buyer-progress.dto';
 import {
   BuyerProgressResponseDto,
   BuyerProgressItemDto,
@@ -43,7 +49,10 @@ export class BuyersService {
       where: { id: builderId },
     });
 
-    if (!builder || (builder.role !== UserRole.BUILDER && builder.role !== UserRole.ADMIN)) {
+    if (
+      !builder ||
+      (builder.role !== UserRole.BUILDER && builder.role !== UserRole.ADMIN)
+    ) {
       throw new ForbiddenException(
         'Only builders and sellers can access buyer progress',
       );
@@ -55,10 +64,13 @@ export class BuyersService {
     // 2. Properties originally owned by builder but now owned by buyer (originalOwnerId = builderId, status = OWNED)
     const builderPropertiesQuery = this.landRepository
       .createQueryBuilder('land')
-      .where('(land.ownerId = :builderId OR (land.originalOwnerId = :builderId AND land.status = :ownedStatus))', {
-        builderId,
-        ownedStatus: LandStatus.OWNED,
-      });
+      .where(
+        '(land.ownerId = :builderId OR (land.originalOwnerId = :builderId AND land.status = :ownedStatus))',
+        {
+          builderId,
+          ownedStatus: LandStatus.OWNED,
+        },
+      );
 
     // Apply project filter if provided
     if (query.projectId) {
@@ -68,7 +80,13 @@ export class BuyersService {
     }
 
     const builderProperties = await builderPropertiesQuery
-      .select(['land.id', 'land.projectId', 'land.ownerId', 'land.originalOwnerId', 'land.status'])
+      .select([
+        'land.id',
+        'land.projectId',
+        'land.ownerId',
+        'land.originalOwnerId',
+        'land.status',
+      ])
       .getMany();
 
     const propertyIds = builderProperties.map((p) => p.id);
@@ -102,7 +120,10 @@ export class BuyersService {
       .innerJoin('payment.buyer', 'buyer')
       .leftJoin('payment.agreement', 'agreement')
       .leftJoin('land.project', 'project')
-      .where('(land.ownerId = :builderId OR land.originalOwnerId = :builderId)', { builderId })
+      .where(
+        '(land.ownerId = :builderId OR land.originalOwnerId = :builderId)',
+        { builderId },
+      )
       .andWhere('land.id IN (:...propertyIds)', { propertyIds })
       .leftJoinAndSelect('payment.land', 'landData')
       .leftJoinAndSelect('payment.buyer', 'buyerData')
@@ -126,7 +147,10 @@ export class BuyersService {
       .innerJoin('request.property', 'property')
       .innerJoin('request.buyer', 'buyer')
       .leftJoin('property.project', 'project')
-      .where('(property.ownerId = :builderId OR property.originalOwnerId = :builderId)', { builderId })
+      .where(
+        '(property.ownerId = :builderId OR property.originalOwnerId = :builderId)',
+        { builderId },
+      )
       .andWhere('property.id IN (:...propertyIds)', { propertyIds })
       .andWhere('request.status = :status', {
         status: PropertyRequestStatus.PENDING,
@@ -183,9 +207,9 @@ export class BuyersService {
         }
 
         // Determine initial status
-        let initialStatus: 'reserved' | 'paying' | 'completed' = 'reserved';
+        let initialStatus: BuyerProgressStatus = BuyerProgressStatus.RESERVED;
         if (agreement?.status === AgreementStatus.SIGNED) {
-          initialStatus = 'paying';
+          initialStatus = BuyerProgressStatus.PAYING;
         }
 
         progressMap.set(key, {
@@ -221,7 +245,10 @@ export class BuyersService {
         progress.verifiedPayments += 1;
 
         // Update last payment info
-        if (!progress.lastPaymentDate || payment.createdAt > progress.lastPaymentDate) {
+        if (
+          !progress.lastPaymentDate ||
+          payment.createdAt > progress.lastPaymentDate
+        ) {
           progress.lastPaymentDate = payment.createdAt;
           progress.lastPaymentAmount = parseFloat(payment.amount.toString());
         }
@@ -235,20 +262,23 @@ export class BuyersService {
       // Update status based on payments, agreement, and property status
       // Check if property is OWNED (ownership transferred) - this means completed
       const currentProperty = payment.land;
-      if (currentProperty.status === LandStatus.OWNED && currentProperty.ownerId !== builderId) {
+      if (
+        currentProperty.status === LandStatus.OWNED &&
+        currentProperty.ownerId !== builderId
+      ) {
         // Property is owned by buyer - ownership transferred, so it's completed
-        progress.status = 'completed';
+        progress.status = BuyerProgressStatus.COMPLETED;
         progress.remainingBalance = 0;
       } else if (progress.remainingBalance <= 0) {
-        progress.status = 'completed';
+        progress.status = BuyerProgressStatus.COMPLETED;
         progress.remainingBalance = 0;
       } else if (progress.totalPaid > 0 || progress.pendingPayments > 0) {
-        progress.status = 'paying';
+        progress.status = BuyerProgressStatus.PAYING;
       } else if (progress.agreementStatus === AgreementStatus.SIGNED) {
         // Agreement signed but no payments yet - still considered "paying"
-        progress.status = 'paying';
+        progress.status = BuyerProgressStatus.PAYING;
       } else {
-        progress.status = 'reserved';
+        progress.status = BuyerProgressStatus.RESERVED;
       }
 
       // Update updatedAt
@@ -280,9 +310,9 @@ export class BuyersService {
         });
 
         // Determine status: if agreement is signed, status is "paying", otherwise "reserved"
-        let status: 'reserved' | 'paying' | 'completed' = 'reserved';
+        let status: BuyerProgressStatus = BuyerProgressStatus.RESERVED;
         if (agreement?.status === AgreementStatus.SIGNED) {
-          status = 'paying';
+          status = BuyerProgressStatus.PAYING;
         }
 
         progressMap.set(key, {
@@ -319,12 +349,18 @@ export class BuyersService {
       .innerJoin('agreement.property', 'property')
       .innerJoin('agreement.buyer', 'buyer')
       .leftJoin('property.project', 'project')
-      .where('(property.ownerId = :builderId OR property.originalOwnerId = :builderId)', { builderId })
+      .where(
+        '(property.ownerId = :builderId OR property.originalOwnerId = :builderId)',
+        { builderId },
+      )
       .andWhere('property.id IN (:...propertyIds)', { propertyIds })
-      .andWhere('(agreement.status = :signedStatus OR agreement.status = :completedStatus)', {
-        signedStatus: AgreementStatus.SIGNED,
-        completedStatus: AgreementStatus.COMPLETED,
-      })
+      .andWhere(
+        '(agreement.status = :signedStatus OR agreement.status = :completedStatus)',
+        {
+          signedStatus: AgreementStatus.SIGNED,
+          completedStatus: AgreementStatus.COMPLETED,
+        },
+      )
       .leftJoinAndSelect('agreement.property', 'propertyData')
       .leftJoinAndSelect('agreement.buyer', 'buyerData')
       .leftJoinAndSelect('propertyData.project', 'projectData');
@@ -394,13 +430,23 @@ export class BuyersService {
           remainingBalance: 0, // Completed means fully paid
           pendingPayments: 0,
           verifiedPayments: allPayments.length,
-          lastPaymentDate: allPayments.length > 0
-            ? allPayments.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0].createdAt
-            : null,
-          lastPaymentAmount: allPayments.length > 0
-            ? parseFloat(allPayments.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0].amount.toString())
-            : null,
-          status: 'completed', // Completed agreement means ownership transferred
+          lastPaymentDate:
+            allPayments.length > 0
+              ? allPayments.sort(
+                  (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+                )[0].createdAt
+              : null,
+          lastPaymentAmount:
+            allPayments.length > 0
+              ? parseFloat(
+                  allPayments
+                    .sort(
+                      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+                    )[0]
+                    .amount.toString(),
+                )
+              : null,
+          status: BuyerProgressStatus.COMPLETED, // Completed agreement means ownership transferred
           agreementId: agreement.id,
           agreementStatus: agreement.status,
           reservationDate: propertyRequest?.createdAt || agreement.createdAt,
@@ -426,7 +472,7 @@ export class BuyersService {
           verifiedPayments: 0,
           lastPaymentDate: null,
           lastPaymentAmount: null,
-          status: 'paying', // Signed agreement means buyer is in paying phase
+          status: BuyerProgressStatus.PAYING, // Signed agreement means buyer is in paying phase
           agreementId: agreement.id,
           agreementStatus: agreement.status,
           reservationDate: propertyRequest?.createdAt || agreement.createdAt,
@@ -442,27 +488,35 @@ export class BuyersService {
     // Apply status filter
     let progressItems = allProgressItems;
     if (query.status) {
-      progressItems = progressItems.filter((item) => item.status === query.status);
+      progressItems = progressItems.filter(
+        (item) => item.status === query.status,
+      );
     }
 
     // Calculate per-status statistics (from all items, not filtered)
     const byStatus = {
       reserved: {
-        count: allProgressItems.filter((item) => item.status === 'reserved').length,
+        count: allProgressItems.filter(
+          (item) => item.status === BuyerProgressStatus.RESERVED,
+        ).length,
         revenue: allProgressItems
-          .filter((item) => item.status === 'reserved')
+          .filter((item) => item.status === BuyerProgressStatus.RESERVED)
           .reduce((sum, item) => sum + item.totalPaid, 0),
       },
       paying: {
-        count: allProgressItems.filter((item) => item.status === 'paying').length,
+        count: allProgressItems.filter(
+          (item) => item.status === BuyerProgressStatus.PAYING,
+        ).length,
         revenue: allProgressItems
-          .filter((item) => item.status === 'paying')
+          .filter((item) => item.status === BuyerProgressStatus.PAYING)
           .reduce((sum, item) => sum + item.totalPaid, 0),
       },
       completed: {
-        count: allProgressItems.filter((item) => item.status === 'completed').length,
+        count: allProgressItems.filter(
+          (item) => item.status === BuyerProgressStatus.COMPLETED,
+        ).length,
         revenue: allProgressItems
-          .filter((item) => item.status === 'completed')
+          .filter((item) => item.status === BuyerProgressStatus.COMPLETED)
           .reduce((sum, item) => sum + item.totalPaid, 0),
       },
     };
@@ -499,11 +553,11 @@ export class BuyersService {
       const projectStats = byProjectMap.get(item.projectId)!;
       projectStats.totalBuyers += 1;
 
-      if (item.status === 'reserved') {
+      if (item.status === BuyerProgressStatus.RESERVED) {
         projectStats.reserved += 1;
-      } else if (item.status === 'paying') {
+      } else if (item.status === BuyerProgressStatus.PAYING) {
         projectStats.inProgress += 1;
-      } else if (item.status === 'completed') {
+      } else if (item.status === BuyerProgressStatus.COMPLETED) {
         projectStats.completed += 1;
       }
 
@@ -531,10 +585,19 @@ export class BuyersService {
     // Calculate overall statistics (use allProgressItems for overall stats, progressItems for filtered count)
     const stats: BuyerProgressStatsDto = {
       totalBuyers: progressItems.length, // Filtered count
-      reserved: allProgressItems.filter((item) => item.status === 'reserved').length,
-      inProgress: allProgressItems.filter((item) => item.status === 'paying').length,
-      completed: allProgressItems.filter((item) => item.status === 'completed').length,
-      totalRevenue: allProgressItems.reduce((sum, item) => sum + item.totalPaid, 0),
+      reserved: allProgressItems.filter(
+        (item) => item.status === BuyerProgressStatus.RESERVED,
+      ).length,
+      inProgress: allProgressItems.filter(
+        (item) => item.status === BuyerProgressStatus.PAYING,
+      ).length,
+      completed: allProgressItems.filter(
+        (item) => item.status === BuyerProgressStatus.COMPLETED,
+      ).length,
+      totalRevenue: allProgressItems.reduce(
+        (sum, item) => sum + item.totalPaid,
+        0,
+      ),
       pendingRevenue: allProgressItems.reduce(
         (sum, item) => sum + item.remainingBalance,
         0,

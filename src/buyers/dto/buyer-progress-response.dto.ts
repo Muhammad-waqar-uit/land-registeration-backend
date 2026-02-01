@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { BuyerProgressStatus } from './query-buyer-progress.dto';
 
 export class BuyerProgressItemDto {
   @ApiProperty({ description: 'Buyer ID', example: 'uuid' })
@@ -89,10 +90,10 @@ export class BuyerProgressItemDto {
 
   @ApiProperty({
     description: 'Buyer progress status',
-    enum: ['reserved', 'paying', 'completed'],
-    example: 'paying',
+    enum: BuyerProgressStatus,
+    example: BuyerProgressStatus.PAYING,
   })
-  status: 'reserved' | 'paying' | 'completed';
+  status: BuyerProgressStatus;
 
   @ApiProperty({
     description: 'Agreement ID if agreement exists',

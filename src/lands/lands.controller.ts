@@ -77,10 +77,7 @@ export class LandsController {
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getMyProperties(
-    @Query() query: QueryLandsDto,
-    @CurrentUser() user: User,
-  ) {
+  getMyProperties(@Query() query: QueryLandsDto, @CurrentUser() user: User) {
     // Automatically filter by current user's ID and owned status
     return this.landsService.findAll({
       ...query,

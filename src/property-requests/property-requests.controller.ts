@@ -123,7 +123,8 @@ export class PropertyRequestsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
   @ApiOperation({
-    summary: "Get all property requests for builder's properties (Builder only) ✅",
+    summary:
+      "Get all property requests for builder's properties (Builder only) ✅",
     description:
       "Get all property requests (pending, approved, rejected, cancelled) for builder's properties. Supports status filtering via query parameter.",
   })
@@ -197,7 +198,10 @@ export class PropertyRequestsController {
           description: 'Property information (REQUIRED - populated)',
           properties: {
             id: { type: 'string', example: 'uuid' },
-            title: { type: 'string', example: 'Beachfront Property Unit A-101' },
+            title: {
+              type: 'string',
+              example: 'Beachfront Property Unit A-101',
+            },
             location: { type: 'string', example: '123 Ocean Drive, Miami, FL' },
             price: { type: 'number', example: 250000.0 },
             size: { type: 'number', example: 500.5 },

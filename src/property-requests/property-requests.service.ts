@@ -282,7 +282,8 @@ export class PropertyRequestsService {
       .getManyAndCount();
 
     // Get agreement IDs for each request
-    const requestsWithAgreements = await this.addAgreementIdsToRequests(requests);
+    const requestsWithAgreements =
+      await this.addAgreementIdsToRequests(requests);
 
     return {
       data: requestsWithAgreements.map((request) =>
@@ -447,7 +448,8 @@ export class PropertyRequestsService {
       .getManyAndCount();
 
     // Get agreement IDs for each request
-    const requestsWithAgreements = await this.addAgreementIdsToRequests(requests);
+    const requestsWithAgreements =
+      await this.addAgreementIdsToRequests(requests);
 
     return {
       data: requestsWithAgreements.map((request) =>
@@ -499,7 +501,8 @@ export class PropertyRequestsService {
       .getManyAndCount();
 
     // Get agreement IDs for each request
-    const requestsWithAgreements = await this.addAgreementIdsToRequests(requests);
+    const requestsWithAgreements =
+      await this.addAgreementIdsToRequests(requests);
 
     return {
       data: requestsWithAgreements.map((request) =>

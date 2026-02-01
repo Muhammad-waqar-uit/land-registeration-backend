@@ -272,9 +272,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getAllUsers(
-    @Query() query: QueryUsersDto,
-  ): Promise<{
+  async getAllUsers(@Query() query: QueryUsersDto): Promise<{
     data: UserDetailResponseDto[];
     total: number;
     page: number;

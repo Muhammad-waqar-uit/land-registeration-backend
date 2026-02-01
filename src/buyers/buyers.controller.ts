@@ -27,7 +27,7 @@ export class BuyersController {
   @ApiOperation({
     summary: "Get buyer progress tracking for builder's properties ✅",
     description:
-      "Returns aggregated buyer progress data for all buyers who have made payments or reservations on properties owned by the authenticated builder/seller. Includes payment statistics, agreement status, progress tracking, per-status stats, and per-project stats. Supports filtering by status, project, land, or buyer.",
+      'Returns aggregated buyer progress data for all buyers who have made payments or reservations on properties owned by the authenticated builder/seller. Includes payment statistics, agreement status, progress tracking, per-status stats, and per-project stats. Supports filtering by status, project, land, or buyer.',
   })
   @ApiResponse({
     status: 200,
@@ -36,7 +36,8 @@ export class BuyersController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Only builders and sellers can access buyer progress',
+    description:
+      'Forbidden - Only builders and sellers can access buyer progress',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getBuyerProgress(

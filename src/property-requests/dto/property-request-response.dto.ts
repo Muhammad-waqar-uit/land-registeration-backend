@@ -46,7 +46,10 @@ class PropertyDto {
   @ApiProperty({ description: 'Property status' })
   status: string;
 
-  @ApiProperty({ description: 'Property size in square meters', example: 500.5 })
+  @ApiProperty({
+    description: 'Property size in square meters',
+    example: 500.5,
+  })
   size: number;
 }
 
@@ -113,7 +116,11 @@ export class PropertyRequestResponseDto {
   agreementId?: string | null;
 
   static fromEntity(
-    request: PropertyRequest & { buyer?: User; property?: Land; agreementId?: string | null },
+    request: PropertyRequest & {
+      buyer?: User;
+      property?: Land;
+      agreementId?: string | null;
+    },
   ): PropertyRequestResponseDto {
     const dto: PropertyRequestResponseDto = {
       id: request.id,
