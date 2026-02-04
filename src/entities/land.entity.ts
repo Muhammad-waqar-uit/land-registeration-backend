@@ -7,6 +7,7 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 import { Payment } from './payment.entity';
@@ -33,6 +34,7 @@ export enum AgreementStatus {
 }
 
 @Entity('lands')
+@Index('idx_lands_unit_project', ['projectId', 'unitId'], { unique: true }) // Ensure unitId is unique within each project
 export class Land {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -44,7 +46,7 @@ export class Land {
   location: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  unitId: string | null; // Unique unit identifier within project
+  unitId: string | null; // Auto-generated unique unit identifier (e.g., "SV-1", "ABC-2")
 
   @Column({ type: 'uuid', nullable: true })
   projectId: string | null; // FK to Project (already exists in relation)

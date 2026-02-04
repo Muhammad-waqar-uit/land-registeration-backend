@@ -32,6 +32,21 @@ export class LandResponseDto {
   })
   location: string;
 
+  @ApiProperty({
+    description:
+      'Auto-generated unique unit ID within project (e.g., SV-1, ABC-2)',
+    example: 'SV-1',
+    required: false,
+  })
+  unitId: string | null;
+
+  @ApiProperty({
+    description: 'Project ID this property belongs to',
+    example: 'uuid',
+    required: false,
+  })
+  projectId?: string | null;
+
   @ApiProperty({ description: 'Land size in square meters', example: 500.5 })
   size: number;
 
@@ -129,6 +144,8 @@ export class LandResponseDto {
       id: land.id,
       title: land.title,
       location: land.location,
+      unitId: land.unitId ?? null,
+      projectId: land.projectId,
       size: parseFloat(land.size.toString()),
       price: parseFloat(land.price.toString()),
       status: land.status,

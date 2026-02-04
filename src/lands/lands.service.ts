@@ -37,6 +37,60 @@ export class LandsService {
     private blockchainService: BlockchainService,
   ) {}
 
+  /**
+   * Generate a unique unit ID for a property within a project
+   * Format: {ProjectPrefix}-{Number}
+   * Example: If project name is "Sunrise Valley", generates: "SV-1", "SV-2", etc.
+   *
+   * @param projectId - Project ID
+   * @param projectName - Project name to derive prefix from
+   * @returns Generated unit ID (e.g., "SV-1")
+   */
+  private async generateUnitId(
+    projectId: string,
+    projectName: string,
+  ): Promise<string> {
+    // Generate prefix from project name
+    // Take first letter of each word, up to 3 characters
+    const words = projectName.trim().split(/\s+/);
+    let prefix = '';
+
+    if (words.length === 1) {
+      // Single word: take first 2-3 characters
+      prefix = words[0].substring(0, 3).toUpperCase();
+    } else {
+      // Multiple words: take first letter of each word (max 3)
+      prefix = words
+        .slice(0, 3)
+        .map((word) => word.charAt(0).toUpperCase())
+        .join('');
+    }
+
+    // Get the count of existing properties in this project
+    const existingCount = await this.landRepository.count({
+      where: { projectId },
+    });
+
+    // Next unit number is existing count + 1
+    const unitNumber = existingCount + 1;
+
+    // Generate unit ID
+    const unitId = `${prefix}-${unitNumber}`;
+
+    // Ensure uniqueness (in case of race conditions or manual edits)
+    const existingUnitId = await this.landRepository.findOne({
+      where: { projectId, unitId },
+    });
+
+    if (existingUnitId) {
+      // If somehow this ID exists, add timestamp suffix
+      const timestamp = Date.now().toString().slice(-4);
+      return `${prefix}-${unitNumber}-${timestamp}`;
+    }
+
+    return unitId;
+  }
+
   async findAll(query: QueryLandsDto): Promise<{
     data: LandResponseDto[];
     total: number;
@@ -318,10 +372,15 @@ export class LandsService {
       );
     }
 
+    // Generate unique unit ID for this property
+    // Format: {ProjectPrefix}-{Number} (e.g., "SV-1", "ABC-2")
+    const unitId = await this.generateUnitId(project.id, project.name);
+
     // Step 5.1: Builder owns property until sold
     // Property ownership is transferred to buyer only after full payment and final agreement
     const land = this.landRepository.create({
       ...createLandDto,
+      unitId, // Auto-generated unique unit ID
       ownerId: builderId, // Builder owns the property until sold (ownership transfer happens after payment completion)
       projectId: createLandDto.projectId, // Property must belong to a project
       isResale: createLandDto.isResale || false,

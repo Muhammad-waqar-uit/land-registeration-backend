@@ -267,6 +267,61 @@ export class ResaleRequestsService {
   }
 
   /**
+   * List property as resale (seller action after approval)
+   */
+  async listPropertyAsSeller(
+    requestId: string,
+    sellerId: string,
+  ): Promise<ResaleRequestResponseDto> {
+    const request = await this.resaleRequestRepository.findOne({
+      where: { id: requestId },
+      relations: ['property'],
+    });
+
+    if (!request) {
+      throw new NotFoundException('Resale request not found');
+    }
+
+    // Verify request belongs to this seller (currentOwner)
+    if (request.currentOwnerId !== sellerId) {
+      throw new ForbiddenException(
+        'You are not authorized to list this property for resale',
+      );
+    }
+
+    // Check if request is approved
+    if (request.status !== ResaleRequestStatus.APPROVED) {
+      throw new BadRequestException(
+        `Cannot list property with status "${request.status}". Request must be approved first.`,
+      );
+    }
+
+    // Update property
+    const property = await this.landRepository.findOne({
+      where: { id: request.propertyId },
+    });
+
+    if (!property) {
+      throw new NotFoundException('Property not found');
+    }
+
+    // Update property for resale
+    property.status = LandStatus.RESALE_LISTED;
+    property.isResale = true;
+    property.price = request.requestedPrice; // Update price to resale price
+
+    await this.landRepository.save(property);
+
+    // Update request status
+    request.status = ResaleRequestStatus.LISTED;
+    request.listedAt = new Date();
+
+    const savedRequest = await this.resaleRequestRepository.save(request);
+
+    return ResaleRequestResponseDto.fromEntity(savedRequest);
+  }
+
+  /**
    * List property owner's resale requests
    */
   async findOwnerResaleRequests(

@@ -18,6 +18,9 @@ import { ResaleRequestsModule } from './resale-requests/resale-requests.module';
 import { InstallmentsModule } from './installments/installments.module';
 import { TokensModule } from './tokens/tokens.module';
 import { BuyersModule } from './buyers/buyers.module';
+import { TokenRequestsModule } from './token-requests/token-requests.module';
+import { TransferRequestsModule } from './transfer-requests/transfer-requests.module';
+import { OwnershipDocumentsModule } from './ownership-documents/ownership-documents.module';
 
 @Module({
   imports: [
@@ -40,8 +43,11 @@ import { BuyersModule } from './buyers/buyers.module';
     InstallmentsModule,
     TokensModule,
     BuyersModule,
+    TokenRequestsModule,
+    TransferRequestsModule,
+    OwnershipDocumentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

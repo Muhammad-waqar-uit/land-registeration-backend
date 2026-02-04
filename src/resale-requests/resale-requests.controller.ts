@@ -152,6 +152,25 @@ export class ResaleRequestsController {
     return this.resaleRequestsService.listPropertyAsResale(id, user.id);
   }
 
+  @Post(':id/list-as-seller')
+  @ApiOperation({
+    summary: 'List property as resale after approval (Property Owner/Seller)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Property successfully listed for resale by seller',
+    type: ResaleRequestResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Request must be approved first' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Not authorized' })
+  @ApiResponse({ status: 404, description: 'Resale request not found' })
+  listPropertyAsSeller(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<ResaleRequestResponseDto> {
+    return this.resaleRequestsService.listPropertyAsSeller(id, user.id);
+  }
+
   @Post(':id/approve')
   @UseGuards(RolesGuard)
   @Roles(UserRole.BUILDER)
