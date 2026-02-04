@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Land, LandStatus } from '../../entities/land.entity';
+import { Land, LandStatus, AgreementStatus } from '../../entities/land.entity';
+import { Project } from '../../entities/project.entity';
+import { User } from '../../entities/user.entity';
+import { UserResponseDto } from '../../auth/dto/auth-response.dto';
 
 class OwnerDto {
   @ApiProperty()
@@ -17,6 +20,39 @@ class OwnerDto {
     nullable: true,
   })
   walletAddress: string | null;
+}
+
+/** Project summary with builder details for property responses */
+export class ProjectDetailDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty({ nullable: true })
+  description: string | null;
+
+  @ApiProperty()
+  location: string;
+
+  @ApiProperty({ nullable: true })
+  locationDetails: string | null;
+
+  @ApiProperty({ enum: ['pending_approval', 'approved', 'active', 'completed'] })
+  status: string;
+
+  @ApiProperty()
+  totalUnits: number;
+
+  @ApiProperty()
+  soldUnits: number;
+
+  @ApiProperty()
+  builderId: string;
+
+  @ApiProperty({ description: 'Builder user details', type: UserResponseDto, required: false })
+  builder?: UserResponseDto;
 }
 
 export class LandResponseDto {
@@ -58,6 +94,41 @@ export class LandResponseDto {
 
   @ApiProperty({ description: 'Owner ID', example: 'uuid' })
   ownerId: string;
+
+  @ApiProperty({ description: 'Whether property is resale', required: false, default: false })
+  isResale?: boolean;
+
+  @ApiProperty({ description: 'Agreement status', enum: AgreementStatus, required: false })
+  agreementStatus?: AgreementStatus;
+
+  @ApiProperty({
+    description: 'ID of the completed agreement for this property (if any)',
+    example: 'uuid',
+    required: false,
+    nullable: true,
+  })
+  agreementId?: string | null;
+
+  @ApiProperty({ description: 'Original owner ID (for resale)', required: false })
+  originalOwnerId?: string | null;
+
+  @ApiProperty({ description: 'Current owner ID', required: false })
+  currentOwnerId?: string | null;
+
+  @ApiProperty({ description: 'Installment plan years (2, 3, or 5)', required: false })
+  installmentPlanYears?: number | null;
+
+  @ApiProperty({ description: 'Installment start date', required: false })
+  installmentStartDate?: Date | null;
+
+  @ApiProperty({ description: 'Installment end date', required: false })
+  installmentEndDate?: Date | null;
+
+  @ApiProperty({ description: 'Total amount paid', required: false })
+  totalPaid?: number;
+
+  @ApiProperty({ description: 'Remaining balance', required: false })
+  remainingBalance?: number | null;
 
   @ApiProperty({
     description: 'Document CID (local storage path)',
@@ -139,6 +210,36 @@ export class LandResponseDto {
   })
   owner?: OwnerDto;
 
+  @ApiProperty({
+    description: 'Full owner user details',
+    type: UserResponseDto,
+    required: false,
+  })
+  ownerDetails?: UserResponseDto;
+
+  @ApiProperty({
+    description: 'Current owner user details (for resale)',
+    type: UserResponseDto,
+    required: false,
+    nullable: true,
+  })
+  currentOwner?: UserResponseDto | null;
+
+  @ApiProperty({
+    description: 'Original owner user details (for resale)',
+    type: UserResponseDto,
+    required: false,
+    nullable: true,
+  })
+  originalOwner?: UserResponseDto | null;
+
+  @ApiProperty({
+    description: 'Project details including builder',
+    type: ProjectDetailDto,
+    required: false,
+  })
+  project?: ProjectDetailDto;
+
   static fromEntity(land: Land, includeOwner = false): LandResponseDto {
     const response: LandResponseDto = {
       id: land.id,
@@ -150,6 +251,15 @@ export class LandResponseDto {
       price: parseFloat(land.price.toString()),
       status: land.status,
       ownerId: land.ownerId,
+      isResale: land.isResale,
+      agreementStatus: land.agreementStatus,
+      originalOwnerId: land.originalOwnerId ?? undefined,
+      currentOwnerId: land.currentOwnerId ?? undefined,
+      installmentPlanYears: land.installmentPlanYears ?? undefined,
+      installmentStartDate: land.installmentStartDate ?? undefined,
+      installmentEndDate: land.installmentEndDate ?? undefined,
+      totalPaid: land.totalPaid != null ? parseFloat(land.totalPaid.toString()) : undefined,
+      remainingBalance: land.remainingBalance != null ? parseFloat(land.remainingBalance.toString()) : undefined,
       documentCID: land.documentCID ?? undefined,
       documentUrl: land.documentUrl ?? undefined,
       documentIPFSHash: land.documentIPFSHash ?? undefined,
@@ -173,6 +283,56 @@ export class LandResponseDto {
       };
     }
 
+    return response;
+  }
+
+  /**
+   * Build full response with project, builder, owner, currentOwner, originalOwner, agreementId.
+   * Use when land is loaded with relations: owner, project, project.builder, currentOwner, originalOwner.
+   */
+  static fromEntityWithDetails(
+    land: Land & {
+      owner?: User;
+      project?: Project | null;
+      currentOwner?: User | null;
+      originalOwner?: User | null;
+    },
+    agreementId?: string | null,
+  ): LandResponseDto {
+    const response = LandResponseDto.fromEntity(land, !!land.owner);
+    if (agreementId !== undefined) {
+      response.agreementId = agreementId ?? null;
+    }
+    if (land.owner) {
+      response.ownerDetails = UserResponseDto.fromEntity(land.owner);
+    }
+    if (land.currentOwner) {
+      response.currentOwner = UserResponseDto.fromEntity(land.currentOwner);
+    } else if (land.currentOwnerId) {
+      response.currentOwner = null;
+    }
+    if (land.originalOwner) {
+      response.originalOwner = UserResponseDto.fromEntity(land.originalOwner);
+    } else if (land.originalOwnerId) {
+      response.originalOwner = null;
+    }
+    if (land.project) {
+      response.project = {
+        id: land.project.id,
+        name: land.project.name,
+        description: land.project.description ?? null,
+        location: land.project.location,
+        locationDetails: land.project.locationDetails ?? null,
+        status: land.project.status,
+        totalUnits: land.project.totalUnits,
+        soldUnits: land.project.soldUnits,
+        builderId: land.project.builderId,
+      };
+      const projectWithBuilder = land.project as Project & { builder?: User };
+      if (projectWithBuilder.builder) {
+        response.project.builder = UserResponseDto.fromEntity(projectWithBuilder.builder);
+      }
+    }
     return response;
   }
 }

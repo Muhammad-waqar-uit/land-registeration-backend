@@ -32,7 +32,6 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../entities/user.entity';
-import { LandStatus } from '../entities/land.entity';
 
 @ApiTags('Properties', 'Lands')
 @Controller(['properties', 'lands']) // Support both routes for backward compatibility
@@ -78,12 +77,36 @@ export class LandsController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getMyProperties(@Query() query: QueryLandsDto, @CurrentUser() user: User) {
-    // Automatically filter by current user's ID and owned status
-    return this.landsService.findAll({
-      ...query,
-      ownerId: user.id,
-      status: LandStatus.OWNED,
-    });
+    return this.landsService.findMyProperties(query, user.id);
+  }
+
+  @Get('builder/my-lands')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({
+    summary: "Get builder's properties (full details) ✅",
+    description:
+      "Get all properties owned by the authenticated builder (for dashboard). Returns project, builder, owner, unitId, agreementId, installments, documents, etc.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Builder's properties with full details",
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/LandResponseDto' },
+        },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Builder only' })
+  getMyBuilderLands(@Query() query: QueryLandsDto, @CurrentUser() user: User) {
+    return this.landsService.findMyBuilderLands(query, user.id);
   }
 
   @Get('admin/all')

@@ -42,14 +42,6 @@ export interface MakePaymentResult {
   error?: string;
 }
 
-export interface GetBalanceResult {
-  success: boolean;
-  balance?: string; // Balance in human-readable format (with decimals)
-  balanceRaw?: bigint; // Raw balance from blockchain
-  decimals?: number;
-  error?: string;
-}
-
 export interface MintTokenResult {
   success: boolean;
   transactionHash?: string;
@@ -1891,73 +1883,6 @@ export class BlockchainService {
       };
     } catch (error) {
       this.logger.error('Error setting penalty basis points:', error);
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : 'Unknown error occurred',
-      };
-    }
-  }
-
-  /**
-   * Get ERC20 token balance for a user address
-   * @param userAddress - User's wallet address
-   * @returns Balance result with human-readable balance and raw balance
-   */
-  async getERC20Balance(userAddress: string): Promise<GetBalanceResult> {
-    if (!this.provider) {
-      return {
-        success: false,
-        error: 'Blockchain provider not configured',
-      };
-    }
-
-    const tokenAddress = this.configService.get<string>(
-      'PAYMENT_TOKEN_ADDRESS',
-    );
-    if (!tokenAddress) {
-      return {
-        success: false,
-        error: 'PAYMENT_TOKEN_ADDRESS not configured',
-      };
-    }
-
-    try {
-      // Validate address format
-      if (!ethers.isAddress(userAddress)) {
-        return {
-          success: false,
-          error: 'Invalid wallet address format',
-        };
-      }
-
-      const tokenContract = new ethers.Contract(
-        tokenAddress,
-        ERC20_ABI,
-        this.provider,
-      );
-
-      // Get balance and decimals
-
-      const balanceRaw = (await tokenContract.balanceOf(userAddress)) as bigint;
-
-      const decimals = (await tokenContract.decimals()) as bigint;
-
-      // Convert to human-readable format
-      const balance = ethers.formatUnits(balanceRaw, Number(decimals));
-
-      this.logger.log(
-        `Balance for ${userAddress}: ${balance} tokens (raw: ${balanceRaw.toString()})`,
-      );
-
-      return {
-        success: true,
-        balance,
-        balanceRaw,
-        decimals: Number(decimals),
-      };
-    } catch (error) {
-      this.logger.error(`Error getting balance for ${userAddress}:`, error);
       return {
         success: false,
         error:

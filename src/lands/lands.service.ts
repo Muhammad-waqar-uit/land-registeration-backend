@@ -5,8 +5,9 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Land, LandStatus } from '../entities/land.entity';
+import { Agreement } from '../entities/agreement.entity';
 import { Payment, PaymentStatus } from '../entities/payment.entity';
 import { User, UserRole } from '../entities/user.entity';
 import { Project, ProjectStatus } from '../entities/project.entity';
@@ -19,12 +20,15 @@ import { IpfsService } from '../common/services/ipfs.service';
 import { HashService } from '../common/services/hash.service';
 import { BlockchainService } from '../common/services/blockchain.service';
 import { ethers } from 'ethers';
+import { AgreementStatus as AgreementEntityStatus } from '../entities/agreement.entity';
 
 @Injectable()
 export class LandsService {
   constructor(
     @InjectRepository(Land)
     private landRepository: Repository<Land>,
+    @InjectRepository(Agreement)
+    private agreementRepository: Repository<Agreement>,
     @InjectRepository(Payment)
     private paymentRepository: Repository<Payment>,
     @InjectRepository(User)
@@ -148,6 +152,167 @@ export class LandsService {
 
     return {
       data: lands.map((land) => LandResponseDto.fromEntity(land)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Get current user's owned properties with full details: project, builder, owner, currentOwner, originalOwner, unitId, installments, etc.
+   */
+  async findMyProperties(
+    query: QueryLandsDto,
+    userId: string,
+  ): Promise<{
+    data: LandResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const {
+      page = 1,
+      limit = 10,
+      projectId,
+      minPrice,
+      maxPrice,
+      isResale,
+    } = query;
+
+    const queryBuilder = this.landRepository
+      .createQueryBuilder('land')
+      .where('land.ownerId = :ownerId', { ownerId: userId })
+      .andWhere('land.status = :status', { status: LandStatus.OWNED })
+      .leftJoinAndSelect('land.owner', 'owner')
+      .leftJoinAndSelect('land.project', 'project')
+      .leftJoinAndSelect('project.builder', 'builder')
+      .leftJoinAndSelect('land.currentOwner', 'currentOwner')
+      .leftJoinAndSelect('land.originalOwner', 'originalOwner');
+
+    if (projectId) {
+      queryBuilder.andWhere('land.projectId = :projectId', { projectId });
+    }
+    if (isResale !== undefined) {
+      queryBuilder.andWhere('land.isResale = :isResale', { isResale });
+    }
+    if (minPrice !== undefined) {
+      queryBuilder.andWhere('land.price >= :minPrice', { minPrice });
+    }
+    if (maxPrice !== undefined) {
+      queryBuilder.andWhere('land.price <= :maxPrice', { maxPrice });
+    }
+
+    const [lands, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('land.createdAt', 'DESC')
+      .getManyAndCount();
+
+    // Load completed agreement ID per property (Agreement has propertyId, not on Land)
+    const landIds = lands.map((l) => l.id);
+    const agreementIdByPropertyId = new Map<string, string>();
+    if (landIds.length > 0) {
+      const agreements = await this.agreementRepository.find({
+        where: {
+          propertyId: In(landIds),
+          status: AgreementEntityStatus.COMPLETED,
+        },
+        order: { createdAt: 'DESC' },
+        select: ['id', 'propertyId'],
+      });
+      for (const a of agreements) {
+        if (!agreementIdByPropertyId.has(a.propertyId)) {
+          agreementIdByPropertyId.set(a.propertyId, a.id);
+        }
+      }
+    }
+
+    return {
+      data: lands.map((land) =>
+        LandResponseDto.fromEntityWithDetails(land, agreementIdByPropertyId.get(land.id) ?? null),
+      ),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Get current builder's properties with full details (for builder dashboard).
+   * Same rich response as findMyProperties: project, builder, owner, currentOwner, originalOwner, unitId, agreementId, etc.
+   */
+  async findMyBuilderLands(
+    query: QueryLandsDto,
+    builderId: string,
+  ): Promise<{
+    data: LandResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      projectId,
+      minPrice,
+      maxPrice,
+      isResale,
+    } = query;
+
+    const queryBuilder = this.landRepository
+      .createQueryBuilder('land')
+      .where('land.ownerId = :builderId', { builderId })
+      .leftJoinAndSelect('land.owner', 'owner')
+      .leftJoinAndSelect('land.project', 'project')
+      .leftJoinAndSelect('project.builder', 'builder')
+      .leftJoinAndSelect('land.currentOwner', 'currentOwner')
+      .leftJoinAndSelect('land.originalOwner', 'originalOwner');
+
+    if (status) {
+      queryBuilder.andWhere('land.status = :status', { status });
+    }
+    if (projectId) {
+      queryBuilder.andWhere('land.projectId = :projectId', { projectId });
+    }
+    if (isResale !== undefined) {
+      queryBuilder.andWhere('land.isResale = :isResale', { isResale });
+    }
+    if (minPrice !== undefined) {
+      queryBuilder.andWhere('land.price >= :minPrice', { minPrice });
+    }
+    if (maxPrice !== undefined) {
+      queryBuilder.andWhere('land.price <= :maxPrice', { maxPrice });
+    }
+
+    const [lands, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('land.createdAt', 'DESC')
+      .getManyAndCount();
+
+    const landIds = lands.map((l) => l.id);
+    const agreementIdByPropertyId = new Map<string, string>();
+    if (landIds.length > 0) {
+      const agreements = await this.agreementRepository.find({
+        where: {
+          propertyId: In(landIds),
+          status: AgreementEntityStatus.COMPLETED,
+        },
+        order: { createdAt: 'DESC' },
+        select: ['id', 'propertyId'],
+      });
+      for (const a of agreements) {
+        if (!agreementIdByPropertyId.has(a.propertyId)) {
+          agreementIdByPropertyId.set(a.propertyId, a.id);
+        }
+      }
+    }
+
+    return {
+      data: lands.map((land) =>
+        LandResponseDto.fromEntityWithDetails(land, agreementIdByPropertyId.get(land.id) ?? null),
+      ),
       total,
       page,
       limit,
