@@ -8,6 +8,7 @@ import { Agreement } from '../entities/agreement.entity';
 import { PropertyRequest } from '../entities/property-request.entity';
 import { User } from '../entities/user.entity';
 import { Project } from '../entities/project.entity';
+import { Installment } from '../entities/installment.entity';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { Project } from '../entities/project.entity';
       PropertyRequest,
       User,
       Project,
+      Installment,
     ]),
   ],
   controllers: [BuyersController],

@@ -10,6 +10,7 @@ import {
 } from '../entities/property-request.entity';
 import { User, UserRole } from '../entities/user.entity';
 import { Project } from '../entities/project.entity';
+import { Installment, InstallmentStatus } from '../entities/installment.entity';
 import {
   QueryBuyerProgressDto,
   BuyerProgressStatus,
@@ -35,7 +36,71 @@ export class BuyersService {
     private userRepository: Repository<User>,
     @InjectRepository(Project)
     private projectRepository: Repository<Project>,
+    @InjectRepository(Installment)
+    private installmentRepository: Repository<Installment>,
   ) {}
+
+  /**
+   * Get buyer dashboard stats (for USER role)
+   */
+  async getBuyerStats(userId: string): Promise<{
+    totalPaid: number;
+    pendingPayments: number;
+    pendingRequests: number;
+    pendingAgreements: number;
+    upcomingInstallments: number;
+    ownedProperties: number;
+  }> {
+    const [
+      totalPaidResult,
+      pendingPaymentsCount,
+      pendingRequestsCount,
+      pendingAgreementsCount,
+      upcomingInstallmentsCount,
+      ownedPropertiesCount,
+    ] = await Promise.all([
+      this.paymentRepository
+        .createQueryBuilder('p')
+        .select('COALESCE(SUM(p.amount), 0)', 'total')
+        .where('p.buyerId = :userId', { userId })
+        .andWhere('p.status = :status', { status: PaymentStatus.VERIFIED })
+        .getRawOne<{ total: string }>(),
+      this.paymentRepository.count({
+        where: { buyerId: userId, status: PaymentStatus.PENDING },
+      }),
+      this.propertyRequestRepository.count({
+        where: { buyerId: userId, status: PropertyRequestStatus.PENDING },
+      }),
+      this.agreementRepository.count({
+        where: [
+          {
+            buyerId: userId,
+            status: AgreementStatus.PENDING_SIGNATURE,
+          },
+        ],
+      }),
+      this.installmentRepository.count({
+        where: { buyerId: userId, status: InstallmentStatus.PENDING },
+      }),
+      this.landRepository.count({
+        where: [
+          { ownerId: userId, status: LandStatus.OWNED },
+          { ownerId: userId, status: LandStatus.SOLD },
+        ],
+      }),
+    ]);
+
+    const totalPaid = parseFloat(totalPaidResult?.total ?? '0') || 0;
+
+    return {
+      totalPaid,
+      pendingPayments: pendingPaymentsCount,
+      pendingRequests: pendingRequestsCount,
+      pendingAgreements: pendingAgreementsCount,
+      upcomingInstallments: upcomingInstallmentsCount,
+      ownedProperties: ownedPropertiesCount,
+    };
+  }
 
   /**
    * Get buyer progress tracking for builder/seller's properties
