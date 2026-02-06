@@ -567,6 +567,36 @@ export class LandsService {
     });
 
     const savedLand = await this.landRepository.save(land);
+
+    // Register property in ledger (LandLedgerLite) so payments can be recorded later
+    if (
+      this.blockchainService.isLedgerAvailable() &&
+      builder.walletAddress
+    ) {
+      try {
+        const result = await this.blockchainService.ledgerRegisterProperty(
+          savedLand.id,
+          builder.walletAddress,
+          builder.walletAddress,
+        );
+        if (result.success) {
+          console.log(
+            `Ledger: property registered for land ${savedLand.id}. TX: ${result.transactionHash}`,
+          );
+        } else {
+          console.warn(
+            `Ledger: failed to register property for land ${savedLand.id}: ${result.error}`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Ledger: error registering property on land create:',
+          error,
+        );
+        // Land is created; ledger registration can be retried or done separately
+      }
+    }
+
     return LandResponseDto.fromEntity(savedLand);
   }
 

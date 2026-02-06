@@ -53,10 +53,10 @@ export class PaymentsController {
         dueDate: { type: 'string', format: 'date', example: '2024-02-01' },
         paymentMode: {
           type: 'string',
-          enum: ['bank', 'crypto'],
+          enum: ['bank', 'points'],
           example: 'bank',
         },
-        transactionHash: { type: 'string' },
+        transactionHash: { type: 'string', description: 'Optional; e.g. from blockchain verification' },
         proof: {
           type: 'string',
           format: 'binary',
@@ -81,16 +81,36 @@ export class PaymentsController {
 
   @Get('my-payments')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.USER)
-  @ApiOperation({ summary: 'Get payments for current user' })
+  @Roles(UserRole.USER, UserRole.BUILDER)
+  @ApiOperation({
+    summary: 'Get payments for current user (buyer: payments made; builder: payments received for lands)',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of payments',
     type: [PaymentResponseDto],
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - User only' })
   findMyPayments(@CurrentUser() user: User) {
+    if (user.role === UserRole.BUILDER) {
+      return this.paymentsService.findPaymentsForBuilder(user.id);
+    }
     return this.paymentsService.findMyPayments(user.id);
+  }
+
+  @Get('builder')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiOperation({
+    summary: "Get all payments for builder's lands (verified, pending, rejected)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "All payments for builder's lands",
+    type: [PaymentResponseDto],
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Builder only' })
+  findPaymentsForBuilder(@CurrentUser() user: User) {
+    return this.paymentsService.findPaymentsForBuilder(user.id);
   }
 
   @Get('pending')

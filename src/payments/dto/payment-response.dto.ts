@@ -14,6 +14,9 @@ class LandInfoDto {
 
   @ApiProperty()
   location: string;
+
+  @ApiProperty({ required: false })
+  ownerId?: string;
 }
 
 class BuyerInfoDto {
@@ -60,7 +63,7 @@ export class PaymentResponseDto {
   proofCID?: string;
 
   @ApiProperty({
-    description: 'Transaction hash (for crypto)',
+    description: 'Transaction hash (e.g. from blockchain verification)',
     required: false,
   })
   transactionHash?: string;
@@ -113,6 +116,7 @@ export class PaymentResponseDto {
           id: payment.land.id,
           title: payment.land.title,
           location: payment.land.location,
+          ownerId: payment.land.ownerId,
         };
       }
 

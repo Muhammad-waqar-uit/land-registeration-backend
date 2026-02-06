@@ -15,7 +15,7 @@ export class TokenRequestResponseDto {
   amount: number;
 
   @ApiPropertyOptional({
-    example: 'Need tokens for property purchase payment',
+    example: 'Need points for property purchase payment',
   })
   notes: string | null;
 

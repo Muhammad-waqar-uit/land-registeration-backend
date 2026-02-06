@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { User, UserRole } from '../entities/user.entity';
 import { Project } from '../entities/project.entity';
 import { Land, LandStatus } from '../entities/land.entity';
+import { Payment, PaymentStatus } from '../entities/payment.entity';
 import { BuilderResponseDto } from './dto/builder-response.dto';
 import { VerifyBuilderDto } from './dto/verify-builder.dto';
 import { RegisterBuilderDto } from './dto/register-builder.dto';
@@ -27,6 +28,8 @@ export class BuildersService {
     private projectRepository: Repository<Project>,
     @InjectRepository(Land)
     private landRepository: Repository<Land>,
+    @InjectRepository(Payment)
+    private paymentRepository: Repository<Payment>,
     private propertyRequestsService: PropertyRequestsService,
   ) {}
 
@@ -342,6 +345,50 @@ export class BuildersService {
       availableProperties,
       soldProperties,
       totalSales,
+    };
+  }
+
+  /**
+   * Get builder stats for dashboard (totalLands, totalRevenue, totalProjects)
+   */
+  async getStats(builderId: string): Promise<{
+    totalLands: number;
+    totalRevenue: number;
+    totalProjects: number;
+  }> {
+    const builder = await this.userRepository.findOne({
+      where: { id: builderId, role: UserRole.BUILDER },
+    });
+
+    if (!builder) {
+      throw new NotFoundException('Builder not found');
+    }
+
+    const [totalLands, totalProjects, revenueResult] = await Promise.all([
+      this.landRepository.count({
+        where: [{ ownerId: builderId }, { originalOwnerId: builderId }],
+      }),
+      this.projectRepository.count({ where: { builderId } }),
+      this.paymentRepository
+        .createQueryBuilder('payment')
+        .innerJoin('payment.land', 'land')
+        .select('COALESCE(SUM(payment.amount), 0)', 'total')
+        .where('payment.status = :status', {
+          status: PaymentStatus.VERIFIED,
+        })
+        .andWhere(
+          '(land.ownerId = :builderId OR land.originalOwnerId = :builderId)',
+          { builderId },
+        )
+        .getRawOne<{ total: string }>(),
+    ]);
+
+    const totalRevenue = parseFloat(revenueResult?.total ?? '0') || 0;
+
+    return {
+      totalLands,
+      totalRevenue,
+      totalProjects,
     };
   }
 

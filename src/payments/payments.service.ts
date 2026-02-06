@@ -11,7 +11,11 @@ import {
   PaymentStatus,
   PaymentMode,
 } from '../entities/payment.entity';
-import { Land, LandStatus } from '../entities/land.entity';
+import {
+  Land,
+  LandStatus,
+  AgreementStatus as LandAgreementStatus,
+} from '../entities/land.entity';
 import { Agreement, AgreementStatus } from '../entities/agreement.entity';
 import { Installment, InstallmentStatus } from '../entities/installment.entity';
 import { User, UserRole } from '../entities/user.entity';
@@ -21,7 +25,6 @@ import { PaymentResponseDto } from './dto/payment-response.dto';
 import { InstallmentSummaryResponseDto } from './dto/installment-summary-response.dto';
 import { FileStorageService } from '../common/services/file-storage.service';
 import { BlockchainService } from '../common/services/blockchain.service';
-import { WalletService } from '../common/services/wallet.service';
 import { IpfsService } from '../common/services/ipfs.service';
 
 @Injectable()
@@ -39,7 +42,6 @@ export class PaymentsService {
     private userRepository: Repository<User>,
     private fileStorageService: FileStorageService,
     private blockchainService: BlockchainService,
-    private walletService: WalletService,
     private ipfsService: IpfsService,
   ) {}
 
@@ -157,8 +159,58 @@ export class PaymentsService {
     let proofCID: string | undefined;
     let proofIPFSHash: string | undefined;
     let transactionHash: string | undefined;
+    let initialStatus = PaymentStatus.PENDING;
 
-    // Upload proof file if provided
+    // POINTS: deduct from buyer's ledger balance and transfer to builder (auto-verified)
+    if (createPaymentDto.paymentMode === PaymentMode.POINTS) {
+      const buyer = await this.userRepository.findOne({
+        where: { id: buyerId },
+        select: ['id', 'walletAddress'],
+      });
+      const builder = land.owner;
+      if (!buyer?.walletAddress || !builder?.walletAddress) {
+        throw new BadRequestException(
+          'Buyer and builder must have wallet addresses for points payment',
+        );
+      }
+      if (!this.blockchainService.isLedgerAvailable()) {
+        throw new BadRequestException(
+          'Ledger is not available. Points payment requires LandLedgerLite.',
+        );
+      }
+      const balanceResult = await this.blockchainService.ledgerGetBalance(
+        buyer.walletAddress,
+      );
+      if (!balanceResult.success || balanceResult.balance === undefined) {
+        throw new BadRequestException(
+          balanceResult.error ?? 'Could not fetch points balance',
+        );
+      }
+      const amountInBaseUnits = BigInt(
+        Math.floor(createPaymentDto.amount * 1e18),
+      );
+      const currentBalance = BigInt(balanceResult.balance);
+      if (currentBalance < amountInBaseUnits) {
+        throw new BadRequestException(
+          `Insufficient points balance. Required: ${createPaymentDto.amount}, available: ${Number(balanceResult.balance) / 1e18}`,
+        );
+      }
+      const transferResult =
+        await this.blockchainService.ledgerTransferPoints(
+          buyer.walletAddress,
+          builder.walletAddress,
+          amountInBaseUnits,
+        );
+      if (!transferResult.success) {
+        throw new BadRequestException(
+          transferResult.error ?? 'Points transfer failed',
+        );
+      }
+      transactionHash = transferResult.transactionHash ?? undefined;
+      initialStatus = PaymentStatus.VERIFIED;
+    }
+
+    // Upload proof file if provided (for BANK)
     if (file) {
       const uploadResult = await this.fileStorageService.uploadFile(
         'payment-proofs',
@@ -173,88 +225,6 @@ export class PaymentsService {
       } catch (error) {
         console.error('Failed to upload proof to IPFS:', error);
         // Continue without IPFS hash if upload fails
-      }
-    }
-
-    // Process payment on blockchain
-    if (land.blockchainLandId && this.blockchainService.isContractAvailable()) {
-      try {
-        // Get buyer user to get wallet address
-        const buyer = await this.userRepository.findOne({
-          where: { id: buyerId },
-          select: ['id', 'walletAddress'],
-        });
-
-        if (!buyer) {
-          throw new NotFoundException('Buyer not found');
-        }
-
-        if (!buyer.walletAddress) {
-          throw new BadRequestException(
-            'Buyer must have a wallet address for blockchain payments',
-          );
-        }
-
-        if (createPaymentDto.paymentMode === PaymentMode.CRYPTO) {
-          // Process ERC20 crypto payment
-          const buyerPrivateKey =
-            this.walletService.getPrivateKeyFromUserId(buyerId);
-
-          // Convert amount to base units (assuming 18 decimals, will be adjusted in blockchain service)
-          const amountInBaseUnits = BigInt(
-            Math.floor(createPaymentDto.amount * 1e18),
-          );
-
-          const paymentResult = await this.blockchainService.makeERC20Payment(
-            land.blockchainLandId,
-            buyerPrivateKey,
-            amountInBaseUnits,
-          );
-
-          if (paymentResult.success && paymentResult.transactionHash) {
-            transactionHash = paymentResult.transactionHash;
-            console.log(
-              `ERC20 payment processed on blockchain. TX: ${paymentResult.transactionHash}`,
-            );
-          } else {
-            console.error(
-              'Failed to process ERC20 payment on blockchain:',
-              paymentResult.error,
-            );
-            // Continue with database payment record even if blockchain fails
-          }
-        } else if (
-          createPaymentDto.paymentMode === PaymentMode.BANK &&
-          proofIPFSHash
-        ) {
-          // Submit bank payment proof to blockchain
-          const amountInBaseUnits = BigInt(
-            Math.floor(createPaymentDto.amount * 1e18),
-          );
-
-          const submitResult = await this.blockchainService.submitBankPayment(
-            land.blockchainLandId,
-            buyer.walletAddress,
-            amountInBaseUnits,
-            proofIPFSHash,
-          );
-
-          if (submitResult.success && submitResult.transactionHash) {
-            transactionHash = submitResult.transactionHash;
-            console.log(
-              `Bank payment proof submitted to blockchain. TX: ${submitResult.transactionHash}`,
-            );
-          } else {
-            console.error(
-              'Failed to submit bank payment proof to blockchain:',
-              submitResult.error,
-            );
-            // Continue with database payment record even if blockchain fails
-          }
-        }
-      } catch (error) {
-        console.error('Error processing payment on blockchain:', error);
-        // Continue with database payment record even if blockchain fails
       }
     }
 
@@ -275,7 +245,7 @@ export class PaymentsService {
       proofCID: proofCID || undefined,
       transactionHash:
         transactionHash || createPaymentDto.transactionHash || undefined,
-      status: PaymentStatus.PENDING,
+      status: initialStatus,
       paymentSequenceNumber,
       isFullPayment,
       isPartialPayment: !isFullPayment && newTotalPaid > 0,
@@ -283,14 +253,91 @@ export class PaymentsService {
 
     const savedPayment = await this.paymentRepository.save(payment);
 
-    // If installment is provided, mark it as paid (will be confirmed after verification)
+    // BANK only: record payment in LandLedgerLite (audit trail; ledger awards points to payee in recordPayment)
+    if (createPaymentDto.paymentMode === PaymentMode.BANK) {
+      try {
+        const buyer = await this.userRepository.findOne({
+          where: { id: buyerId },
+          select: ['id', 'walletAddress'],
+        });
+        const builder = land.owner;
+        if (
+          buyer?.walletAddress &&
+          builder?.walletAddress &&
+          this.blockchainService.isLedgerAvailable()
+        ) {
+          const amountInBaseUnits = BigInt(
+            Math.floor(createPaymentDto.amount * 1e18),
+          );
+          await this.blockchainService.ledgerRecordPayment(
+            land.id,
+            0,
+            buyer.walletAddress,
+            builder.walletAddress,
+            '0x0000000000000000000000000000000000000000',
+            amountInBaseUnits,
+            savedPayment.id,
+            builder.walletAddress, // builder: ledger registers property if missing
+          );
+        }
+      } catch (error) {
+        console.error('Error recording bank payment in ledger:', error);
+        // Continue even if ledger fails
+      }
+    }
+
+    // If installment is provided, mark it as paid (will be confirmed after verification for BANK)
     if (installment) {
       installment.status = InstallmentStatus.PAID;
       installment.paymentDate = new Date();
       await this.installmentRepository.save(installment);
     }
 
-    return PaymentResponseDto.fromEntity(savedPayment);
+    // POINTS payments are already VERIFIED: update land totalPaid, status, and ownership if full
+    if (initialStatus === PaymentStatus.VERIFIED && land) {
+      await this.applyVerifiedPaymentToLand(land.id);
+    }
+
+    const savedWithRelations = await this.paymentRepository.findOne({
+      where: { id: savedPayment.id },
+      relations: ['land', 'buyer', 'agreement', 'installment'],
+    });
+    return PaymentResponseDto.fromEntity(savedWithRelations ?? savedPayment, true);
+  }
+
+  /**
+   * Recalculate total paid from verified payments and update land (status, ownership if fully paid).
+   * Used after a payment is verified (builder verify for BANK, or after POINTS transfer).
+   */
+  private async applyVerifiedPaymentToLand(landId: string): Promise<void> {
+    const land = await this.landRepository.findOne({
+      where: { id: landId },
+      relations: ['owner'],
+    });
+    if (!land) return;
+
+    const verifiedPayments = await this.paymentRepository.find({
+      where: { landId, status: PaymentStatus.VERIFIED },
+    });
+    const totalPaid = verifiedPayments.reduce(
+      (sum, p) => sum + Number(p.amount),
+      0,
+    );
+
+    land.totalPaid = totalPaid;
+    land.remainingBalance = land.price - totalPaid;
+    if (land.status === LandStatus.AGREEMENT_PENDING) {
+      land.status = LandStatus.PAYMENT_IN_PROGRESS;
+    }
+    // When fully paid: mark land ready for ownership document (builder upload → admin approve).
+    // Ownership transfers only when admin approves the ownership document, not here.
+    if (totalPaid >= land.price) {
+      land.remainingBalance = 0;
+      land.agreementStatus = LandAgreementStatus.COMPLETED;
+      // Do not set ownerId/currentOwnerId or status=OWNED here; that happens in
+      // ownership-documents when admin approves the ownership document.
+    }
+    await this.landRepository.save(land);
   }
 
   async findMyPayments(buyerId: string): Promise<PaymentResponseDto[]> {
@@ -299,6 +346,31 @@ export class PaymentsService {
       relations: ['land'],
       order: { createdAt: 'DESC' },
     });
+
+    return payments.map((payment) =>
+      PaymentResponseDto.fromEntity(payment, true),
+    );
+  }
+
+  /**
+   * Find all payments for builder's lands (verified, pending, rejected)
+   */
+  async findPaymentsForBuilder(
+    builderId: string,
+  ): Promise<PaymentResponseDto[]> {
+    const payments = await this.paymentRepository
+      .createQueryBuilder('payment')
+      .innerJoin('payment.land', 'land')
+      .leftJoin('payment.agreement', 'agreement')
+      .leftJoinAndSelect('payment.buyer', 'buyer')
+      .leftJoinAndSelect('payment.land', 'landData')
+      .leftJoinAndSelect('payment.agreement', 'agreementData')
+      .where(
+        '(land.ownerId = :builderId OR (agreement.builderId = :builderId) OR (land.originalOwnerId = :builderId))',
+        { builderId },
+      )
+      .orderBy('payment.createdAt', 'DESC')
+      .getMany();
 
     return payments.map((payment) =>
       PaymentResponseDto.fromEntity(payment, true),
@@ -446,37 +518,7 @@ export class PaymentsService {
 
     // Update property payment tracking if payment is verified
     if (verifyPaymentDto.verified && payment.land) {
-      // Calculate total paid from all verified payments
-      const verifiedPayments = await this.paymentRepository.find({
-        where: {
-          landId: payment.landId,
-          status: PaymentStatus.VERIFIED,
-        },
-      });
-
-      const totalPaid = verifiedPayments.reduce(
-        (sum, p) => sum + Number(p.amount),
-        0,
-      );
-
-      // Update property
-      payment.land.totalPaid = totalPaid;
-      payment.land.remainingBalance = payment.land.price - totalPaid;
-
-      // Update property status based on payment progress
-      if (payment.land.status === LandStatus.AGREEMENT_PENDING) {
-        payment.land.status = LandStatus.PAYMENT_IN_PROGRESS;
-      }
-
-      // If fully paid, mark as owned
-      if (totalPaid >= payment.land.price) {
-        payment.land.remainingBalance = 0;
-        payment.land.status = LandStatus.OWNED;
-        payment.land.currentOwnerId = payment.buyerId;
-        // Note: Ownership transfer to buyer will be completed via final agreement
-      }
-
-      await this.landRepository.save(payment.land);
+      await this.applyVerifiedPaymentToLand(payment.landId);
     } else if (!verifyPaymentDto.verified && payment.installmentId) {
       // If payment is rejected and was for an installment, reset installment status
       const installment = await this.installmentRepository.findOne({

@@ -15,6 +15,7 @@ import { CreateTokenRequestDto } from './dto/create-token-request.dto';
 import { RespondTokenRequestDto } from './dto/respond-token-request.dto';
 import { QueryTokenRequestsDto } from './dto/query-token-requests.dto';
 import { TokenRequestResponseDto } from './dto/token-request-response.dto';
+import { TokensService } from '../tokens/tokens.service';
 
 @Injectable()
 export class TokenRequestsService {
@@ -23,6 +24,7 @@ export class TokenRequestsService {
     private tokenRequestRepository: Repository<TokenRequest>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    private tokensService: TokensService,
   ) {}
 
   /**
@@ -116,6 +118,26 @@ export class TokenRequestsService {
 
     const savedRequest = await this.tokenRequestRepository.save(request);
 
+    // When approved: award points to the user's wallet via ledger (LandLedgerLite)
+    if (respondDto.status === TokenRequestStatus.APPROVED && request.user) {
+      const walletAddress = request.user.walletAddress;
+      if (!walletAddress || typeof walletAddress !== 'string' || walletAddress.trim() === '') {
+        throw new BadRequestException(
+          'Cannot award points: user has no wallet address. User must generate a wallet first.',
+        );
+      }
+      const amount = Number(request.amount);
+      const mintResult = await this.tokensService.mintToken({
+        toAddress: walletAddress.trim(),
+        amount,
+      });
+      if (!mintResult.success) {
+        throw new BadRequestException(
+          mintResult.error ?? 'Failed to award points to user wallet. Request was approved but points were not minted.',
+        );
+      }
+    }
+
     // Load reviewer relation for response
     const requestWithRelations = await this.tokenRequestRepository.findOne({
       where: { id: savedRequest.id },
@@ -125,9 +147,6 @@ export class TokenRequestsService {
     if (!requestWithRelations) {
       throw new NotFoundException('Token request not found after update');
     }
-
-    // TODO: If approved, you may want to trigger blockchain token transfer here
-    // This would integrate with your TokensService to actually mint/transfer tokens
 
     return TokenRequestResponseDto.fromEntity(requestWithRelations);
   }

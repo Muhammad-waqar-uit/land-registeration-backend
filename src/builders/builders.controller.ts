@@ -226,6 +226,27 @@ export class BuildersController {
     return this.buildersService.getDashboardStats(user.id);
   }
 
+  @Get('me/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.BUILDER)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: "Get builder's stats (totalLands, totalRevenue, totalProjects)" })
+  @ApiResponse({
+    status: 200,
+    description: 'Builder stats for dashboard',
+    schema: {
+      type: 'object',
+      properties: {
+        totalLands: { type: 'number', example: 12 },
+        totalRevenue: { type: 'number', example: 450000 },
+        totalProjects: { type: 'number', example: 5 },
+      },
+    },
+  })
+  async getStats(@CurrentUser() user: User) {
+    return this.buildersService.getStats(user.id);
+  }
+
   @Get('me/requests')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.BUILDER)

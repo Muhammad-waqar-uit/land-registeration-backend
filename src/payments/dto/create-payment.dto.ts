@@ -52,7 +52,7 @@ export class CreatePaymentDto {
   dueDate?: string;
 
   @ApiProperty({
-    description: 'Payment mode',
+    description: 'Payment mode: bank (builder verifies) or points (ledger deduction, auto-verified)',
     enum: PaymentMode,
     example: PaymentMode.BANK,
   })
@@ -60,7 +60,7 @@ export class CreatePaymentDto {
   paymentMode: PaymentMode;
 
   @ApiProperty({
-    description: 'Transaction hash (for crypto payments)',
+    description: 'Transaction hash (optional; e.g. from blockchain verification)',
     required: false,
   })
   @IsOptional()

@@ -47,7 +47,6 @@ lerna-debug.log*
 .tmp
 
 # Uploaded files
-uploads/
 
 # Backup files
 *.backup

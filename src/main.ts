@@ -47,8 +47,7 @@ async function bootstrap() {
     .addTag('Payments', 'Payment processing endpoints')
     .addTag('Installments', 'Installment management endpoints')
     .addTag('Contact', 'Contact form endpoints')
-    .addTag('Tokens', 'ERC20 token management endpoints')
-    .addTag('ERC20', 'ERC20 token management endpoints (alias)')
+    .addTag('Tokens', 'Ledger points balance and mint (admin) endpoints')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

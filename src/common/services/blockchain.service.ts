@@ -30,19 +30,13 @@ export interface UpdateLandResult {
   error?: string;
 }
 
-export interface ApproveTokenResult {
-  success: boolean;
-  transactionHash?: string;
-  error?: string;
-}
-
 export interface MakePaymentResult {
   success: boolean;
   transactionHash?: string;
   error?: string;
 }
 
-export interface MintTokenResult {
+export interface LedgerTxResult {
   success: boolean;
   transactionHash?: string;
   error?: string;
@@ -57,8 +51,7 @@ const LAND_REGISTRY_ABI = [
   'function sellerApproveUpdate(uint256 landId, address seller) external',
   'function sellerRevokeUpdateApproval(uint256 landId, address seller) external',
   'function adminUnlockLand(uint256 landId) external',
-  // Payments
-  'function makePayment(uint256 landId, address buyer, uint256 amount) external',
+  // Payments (bank only; ledger/points used for recording)
   'function submitBankPayment(uint256 landId, address buyer, uint256 amount, string memory proofHash) external',
   'function verifyBankPayment(uint256 landId, bool approved) external',
   // Ownership transfer
@@ -107,15 +100,19 @@ const LAND_REGISTRY_ABI = [
   'event OwnershipDocumentHashStored(uint256 indexed landId, bytes32 documentHash, string documentIPFSHash, uint256 storedAt)',
 ];
 
-// ERC20 Token ABI
-const ERC20_ABI = [
-  'function approve(address spender, uint256 amount) external returns (bool)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-  'function balanceOf(address account) view returns (uint256)',
-  'function decimals() view returns (uint8)',
-  'function transfer(address to, uint256 amount) external returns (bool)',
-  'function mint(address to, uint256 amount) external',
-  'function owner() view returns (address)',
+// LandLedgerLite ABI (storage-focused ledger contract)
+const LAND_LEDGER_ABI = [
+  'function registerProperty(bytes32 offchainId, address builder, address currentOwner) external returns (uint256)',
+  'function updatePropertyOwner(uint256 propertyId, address newOwner, bool isResale) external',
+  'function updatePropertyOwnerByOffchainId(bytes32 offchainLandId, address builder, address newOwner, bool isResale) external',
+  'function recordTrade(uint256 propertyId, address seller, address buyer, uint256 price, bool isResale, bytes32 offchainAgreementId) external returns (uint256)',
+  'function recordTradeByOffchainId(bytes32 offchainLandId, address builder, address seller, address buyer, uint256 price, bool isResale, bytes32 offchainAgreementId) external returns (uint256)',
+  'function recordPayment(uint256 propertyId, uint256 tradeId, address payer, address payee, address token, uint256 amount, bytes32 offchainPaymentId) external returns (uint256)',
+  'function recordPaymentByOffchainId(bytes32 offchainLandId, address builder, uint256 tradeId, address payer, address payee, address token, uint256 amount, bytes32 offchainPaymentId) external returns (uint256)',
+  'function propertyIdByOffchainId(bytes32 offchainId) view returns (uint256)',
+  'function awardPoints(address to, uint256 amount) external',
+  'function transferPoints(address from, address to, uint256 amount) external',
+  'function getBalance(address user) view returns (uint256)',
 ];
 
 @Injectable()
@@ -125,10 +122,13 @@ export class BlockchainService {
   private signer: ethers.Wallet | null = null;
   private contract: ethers.Contract | null = null;
   private contractAddress: string | null = null;
+  private ledgerContract: ethers.Contract | null = null;
+  private ledgerContractAddress: string | null = null;
 
   constructor(private configService: ConfigService) {
     this.initializeProvider();
     this.initializeContract();
+    this.initializeLedgerContract();
   }
 
   /**
@@ -198,6 +198,48 @@ export class BlockchainService {
   }
 
   /**
+   * Initialize LandLedgerLite contract connection (storage ledger)
+   */
+  private initializeLedgerContract(): void {
+    const contractAddress = this.configService.get<string>(
+      'LEDGER_CONTRACT_ADDRESS',
+    );
+    const adminPrivateKey = this.configService.get<string>(
+      'BLOCKCHAIN_ADMIN_PRIVATE_KEY',
+    );
+
+    if (!contractAddress || !adminPrivateKey) {
+      this.logger.warn(
+        'LEDGER_CONTRACT_ADDRESS or BLOCKCHAIN_ADMIN_PRIVATE_KEY not configured. Ledger operations will be disabled.',
+      );
+      return;
+    }
+
+    if (!this.provider) {
+      this.logger.warn(
+        'Blockchain provider not initialized. Ledger operations will be disabled.',
+      );
+      return;
+    }
+
+    try {
+      const signer = new ethers.Wallet(adminPrivateKey, this.provider);
+      this.signer = this.signer ?? signer;
+      this.ledgerContractAddress = contractAddress;
+      this.ledgerContract = new ethers.Contract(
+        contractAddress,
+        LAND_LEDGER_ABI,
+        signer,
+      );
+      this.logger.log(
+        `LandLedgerLite initialized at ${contractAddress} with admin address ${signer.address}`,
+      );
+    } catch (error) {
+      this.logger.error('Failed to initialize LandLedgerLite contract:', error);
+    }
+  }
+
+  /**
    * Verify a blockchain transaction
    * @param transactionHash - The transaction hash to verify
    * @param minConfirmations - Minimum number of confirmations required (default: 3)
@@ -263,6 +305,424 @@ export class BlockchainService {
    */
   isAvailable(): boolean {
     return this.provider !== null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // LandLedgerLite helpers (record-only ledger)
+  // ---------------------------------------------------------------------------
+
+  isLedgerAvailable(): boolean {
+    return !!this.provider && !!this.ledgerContract && !!this.ledgerContractAddress;
+  }
+
+  /**
+   * Helper to turn arbitrary string (UUID, ID) into bytes32 for offchain IDs.
+   */
+  private hashOffchainId(id: string): string {
+    // keccak256 of UTF-8 string
+    return ethers.id(id);
+  }
+
+  /**
+   * Register a property in the ledger (mirror of DB land record).
+   */
+  async ledgerRegisterProperty(
+    offchainLandId: string,
+    builderAddress: string,
+    currentOwnerAddress: string,
+  ): Promise<LedgerTxResult> {
+    if (!this.isLedgerAvailable()) {
+      return {
+        success: false,
+        error: 'Ledger contract not available',
+      };
+    }
+
+    try {
+      const offchainHash = this.hashOffchainId(offchainLandId);
+      const tx = (await this.ledgerContract!.registerProperty(
+        offchainHash,
+        builderAddress,
+        currentOwnerAddress,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Ledger: registering property for offchainId=${offchainLandId}. TX=${tx.hash}`,
+      );
+
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+      if (!receipt || receipt.status !== 1) {
+        return { success: false, error: 'Ledger transaction failed or reverted' };
+      }
+
+      return { success: true, transactionHash: tx.hash };
+    } catch (error) {
+      this.logger.error('Ledger: error registering property', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Get ledger propertyId for a given offchain land ID (DB land.id).
+   */
+  private async getLedgerPropertyIdByOffchainId(
+    offchainLandId: string,
+  ): Promise<number | null> {
+    if (!this.isLedgerAvailable()) {
+      return null;
+    }
+    try {
+      const offchainHash = this.hashOffchainId(offchainLandId);
+      const idBig = (await this.ledgerContract!.propertyIdByOffchainId(
+        offchainHash,
+      )) as bigint;
+      const id = Number(idBig);
+      return id === 0 ? null : id;
+    } catch (error) {
+      this.logger.error(
+        `Ledger: error getting propertyId for offchainId=${offchainLandId}`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Update property owner in ledger (sale or resale).
+   * If builderAddress is provided, uses updatePropertyOwnerByOffchainId so property is registered if missing.
+   */
+  async ledgerUpdatePropertyOwner(
+    offchainLandId: string,
+    newOwnerAddress: string,
+    isResale: boolean,
+    builderAddress?: string,
+  ): Promise<LedgerTxResult> {
+    if (!this.isLedgerAvailable()) {
+      return {
+        success: false,
+        error: 'Ledger contract not available',
+      };
+    }
+    if (builderAddress) {
+      try {
+        const landHash = this.hashOffchainId(offchainLandId);
+        const tx = (await this.ledgerContract!.updatePropertyOwnerByOffchainId(
+          landHash,
+          builderAddress,
+          newOwnerAddress,
+          isResale,
+        )) as ethers.ContractTransactionResponse;
+        this.logger.log(
+          `Ledger: updating property owner by offchainId land=${offchainLandId} newOwner=${newOwnerAddress}. TX=${tx.hash}`,
+        );
+        const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+        if (!receipt || receipt.status !== 1) {
+          return { success: false, error: 'Ledger transaction failed or reverted' };
+        }
+        return { success: true, transactionHash: tx.hash };
+      } catch (error) {
+        this.logger.error('Ledger: error updating property owner by offchainId', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+    const propertyId = await this.getLedgerPropertyIdByOffchainId(offchainLandId);
+    if (!propertyId) {
+      return { success: false, error: 'Ledger property not found for land' };
+    }
+    try {
+      const tx = (await this.ledgerContract!.updatePropertyOwner(
+        propertyId,
+        newOwnerAddress,
+        isResale,
+      )) as ethers.ContractTransactionResponse;
+      this.logger.log(
+        `Ledger: updating property owner propertyId=${propertyId} newOwner=${newOwnerAddress}. TX=${tx.hash}`,
+      );
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+      if (!receipt || receipt.status !== 1) {
+        return { success: false, error: 'Ledger transaction failed or reverted' };
+      }
+      return { success: true, transactionHash: tx.hash };
+    } catch (error) {
+      this.logger.error('Ledger: error updating property owner', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Record a trade (sale or resale) in the ledger.
+   * If builderAddress is provided, uses recordTradeByOffchainId so the property is registered on ledger if missing (no "property not found").
+   */
+  async ledgerRecordTrade(
+    offchainLandId: string,
+    sellerAddress: string,
+    buyerAddress: string,
+    priceInBaseUnits: bigint,
+    isResale: boolean,
+    offchainAgreementId: string,
+    builderAddress?: string,
+  ): Promise<LedgerTxResult> {
+    if (!this.isLedgerAvailable()) {
+      return {
+        success: false,
+        error: 'Ledger contract not available',
+      };
+    }
+    const agreementHash = this.hashOffchainId(offchainAgreementId);
+    const landHash = this.hashOffchainId(offchainLandId);
+
+    if (builderAddress) {
+      try {
+        const tx = (await this.ledgerContract!.recordTradeByOffchainId(
+          landHash,
+          builderAddress,
+          sellerAddress,
+          buyerAddress,
+          priceInBaseUnits,
+          isResale,
+          agreementHash,
+        )) as ethers.ContractTransactionResponse;
+        this.logger.log(
+          `Ledger: recording trade by offchainId land=${offchainLandId}, seller=${sellerAddress}, buyer=${buyerAddress}. TX=${tx.hash}`,
+        );
+        const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+        if (!receipt || receipt.status !== 1) {
+          return { success: false, error: 'Ledger transaction failed or reverted' };
+        }
+        return { success: true, transactionHash: tx.hash };
+      } catch (error) {
+        this.logger.error('Ledger: error recording trade by offchainId', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+
+    const propertyId = await this.getLedgerPropertyIdByOffchainId(offchainLandId);
+    if (!propertyId) {
+      return { success: false, error: 'Ledger property not found for land' };
+    }
+    try {
+      const tx = (await this.ledgerContract!.recordTrade(
+        propertyId,
+        sellerAddress,
+        buyerAddress,
+        priceInBaseUnits,
+        isResale,
+        agreementHash,
+      )) as ethers.ContractTransactionResponse;
+
+      this.logger.log(
+        `Ledger: recording trade propertyId=${propertyId}, seller=${sellerAddress}, buyer=${buyerAddress}, price=${priceInBaseUnits}. TX=${tx.hash}`,
+      );
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+      if (!receipt || receipt.status !== 1) {
+        return { success: false, error: 'Ledger transaction failed or reverted' };
+      }
+      return { success: true, transactionHash: tx.hash };
+    } catch (error) {
+      this.logger.error('Ledger: error recording trade', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Record a payment in the ledger.
+   * If builderAddress is provided, uses recordPaymentByOffchainId so property is registered if missing.
+   */
+  async ledgerRecordPayment(
+    offchainLandId: string,
+    tradeId: number,
+    payer: string,
+    payee: string,
+    tokenAddress: string,
+    amountInBaseUnits: bigint,
+    offchainPaymentId: string,
+    builderAddress?: string,
+  ): Promise<LedgerTxResult> {
+    if (!this.isLedgerAvailable()) {
+      return {
+        success: false,
+        error: 'Ledger contract not available',
+      };
+    }
+    const token =
+      tokenAddress && tokenAddress !== '0x0000000000000000000000000000000000000000'
+        ? tokenAddress
+        : this.ledgerContractAddress!;
+    const paymentHash = this.hashOffchainId(offchainPaymentId);
+    const landHash = this.hashOffchainId(offchainLandId);
+
+    if (builderAddress) {
+      try {
+        const tx = (await this.ledgerContract!.recordPaymentByOffchainId(
+          landHash,
+          builderAddress,
+          tradeId,
+          payer,
+          payee,
+          token,
+          amountInBaseUnits,
+          paymentHash,
+        )) as ethers.ContractTransactionResponse;
+        this.logger.log(
+          `Ledger: recording payment by offchainId land=${offchainLandId}, tradeId=${tradeId}, amount=${amountInBaseUnits}. TX=${tx.hash}`,
+        );
+        const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+        if (!receipt || receipt.status !== 1) {
+          return { success: false, error: 'Ledger transaction failed or reverted' };
+        }
+        return { success: true, transactionHash: tx.hash };
+      } catch (error) {
+        this.logger.error('Ledger: error recording payment by offchainId', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+
+    const propertyId = await this.getLedgerPropertyIdByOffchainId(offchainLandId);
+    if (!propertyId) {
+      return { success: false, error: 'Ledger property not found for land' };
+    }
+    try {
+      const tx = (await this.ledgerContract!.recordPayment(
+        propertyId,
+        tradeId,
+        payer,
+        payee,
+        token,
+        amountInBaseUnits,
+        paymentHash,
+      )) as ethers.ContractTransactionResponse;
+      this.logger.log(
+        `Ledger: recording payment propertyId=${propertyId}, tradeId=${tradeId}, amount=${amountInBaseUnits}. TX=${tx.hash}`,
+      );
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+      if (!receipt || receipt.status !== 1) {
+        return { success: false, error: 'Ledger transaction failed or reverted' };
+      }
+      return { success: true, transactionHash: tx.hash };
+    } catch (error) {
+      this.logger.error('Ledger: error recording payment', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Get point balance from LandLedgerLite for a wallet address.
+   */
+  async ledgerGetBalance(
+    walletAddress: string,
+  ): Promise<{ success: boolean; balance?: string; error?: string }> {
+    if (!this.isLedgerAvailable()) {
+      return { success: false, error: 'Ledger contract not available' };
+    }
+    try {
+      const bal = (await this.ledgerContract!.getBalance(
+        walletAddress,
+      )) as bigint;
+      return { success: true, balance: bal.toString() };
+    } catch (error) {
+      this.logger.error(
+        `Ledger: error getting balance for ${walletAddress}`,
+        error,
+      );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Admin-only: mint/award points to a given wallet in LandLedgerLite.
+   */
+  async ledgerAwardPoints(
+    walletAddress: string,
+    amountInBaseUnits: bigint,
+  ): Promise<LedgerTxResult> {
+    if (!this.isLedgerAvailable()) {
+      return { success: false, error: 'Ledger contract not available' };
+    }
+    try {
+      const tx = (await this.ledgerContract!.awardPoints(
+        walletAddress,
+        amountInBaseUnits,
+      )) as ethers.ContractTransactionResponse;
+      this.logger.log(
+        `Ledger: awarding ${amountInBaseUnits} points to ${walletAddress}. TX=${tx.hash}`,
+      );
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+      if (!receipt || receipt.status !== 1) {
+        return { success: false, error: 'Ledger transaction failed or reverted' };
+      }
+      return { success: true, transactionHash: tx.hash };
+    } catch (error) {
+      this.logger.error(
+        `Ledger: error awarding points to ${walletAddress}`,
+        error,
+      );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Transfer points from one address to another (e.g. buyer pays seller with points).
+   * Admin-only on contract. Used for payment mode POINTS.
+   */
+  async ledgerTransferPoints(
+    fromAddress: string,
+    toAddress: string,
+    amountInBaseUnits: bigint,
+  ): Promise<LedgerTxResult> {
+    if (!this.isLedgerAvailable()) {
+      return { success: false, error: 'Ledger contract not available' };
+    }
+    try {
+      const tx = (await this.ledgerContract!.transferPoints(
+        fromAddress,
+        toAddress,
+        amountInBaseUnits,
+      )) as ethers.ContractTransactionResponse;
+      this.logger.log(
+        `Ledger: transfer ${amountInBaseUnits} points from ${fromAddress} to ${toAddress}. TX=${tx.hash}`,
+      );
+      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
+      if (!receipt || receipt.status !== 1) {
+        return { success: false, error: 'Ledger transfer failed or reverted' };
+      }
+      return { success: true, transactionHash: tx.hash };
+    } catch (error) {
+      this.logger.error(
+        `Ledger: error transferring points from ${fromAddress} to ${toAddress}`,
+        error,
+      );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
@@ -604,205 +1064,6 @@ export class BlockchainService {
       };
     } catch (error) {
       this.logger.error(`Error updating land ${landId} on blockchain:`, error);
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : 'Unknown error occurred',
-      };
-    }
-  }
-
-  /**
-   * Get user's wallet signer from private key
-   * @param privateKey - User's private key (from HD wallet)
-   * @returns Wallet signer connected to provider
-   */
-  private getUserSigner(privateKey: string): ethers.Wallet {
-    if (!this.provider) {
-      throw new Error('Blockchain provider not initialized');
-    }
-    return new ethers.Wallet(privateKey, this.provider);
-  }
-
-  /**
-   * Approve ERC20 tokens for contract (using user's HD wallet)
-   * @param userPrivateKey - User's private key (from HD wallet)
-   * @param amount - Amount to approve (in token units, will be converted based on token decimals)
-   * @returns Approval result with transaction hash
-   */
-  async approveTokenForContract(
-    userPrivateKey: string,
-    amount: bigint,
-  ): Promise<ApproveTokenResult> {
-    if (!this.isContractAvailable() || !this.provider) {
-      return {
-        success: false,
-        error: 'Blockchain service not available',
-      };
-    }
-
-    const tokenAddress = this.configService.get<string>(
-      'PAYMENT_TOKEN_ADDRESS',
-    );
-    if (!tokenAddress) {
-      return {
-        success: false,
-        error: 'PAYMENT_TOKEN_ADDRESS not configured',
-      };
-    }
-
-    try {
-      const userSigner = this.getUserSigner(userPrivateKey);
-      const tokenContract = new ethers.Contract(
-        tokenAddress,
-        ERC20_ABI,
-        userSigner,
-      );
-
-      // Get token decimals
-      const decimals = (await tokenContract.decimals()) as bigint;
-      const amountWithDecimals = amount * BigInt(10 ** Number(decimals));
-
-      // Check current allowance
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const currentAllowance = await tokenContract.allowance(
-        userSigner.address,
-        this.contractAddress,
-      );
-
-      if (currentAllowance >= amountWithDecimals) {
-        this.logger.log(
-          `Tokens already approved. Current allowance: ${currentAllowance}`,
-        );
-        return {
-          success: true,
-          // No transaction needed, already approved
-        };
-      }
-
-      // Approve tokens
-      const tx = (await tokenContract.approve(
-        this.contractAddress!,
-        amountWithDecimals,
-      )) as ethers.ContractTransactionResponse;
-
-      const txHash = tx.hash;
-      this.logger.log(
-        `Approving ${amountWithDecimals} tokens (${amount} with ${decimals} decimals) for user ${userSigner.address}. TX: ${txHash}`,
-      );
-
-      const receipt = await tx.wait();
-
-      if (!receipt || receipt.status !== 1) {
-        return {
-          success: false,
-          error: 'Approval transaction failed',
-        };
-      }
-
-      this.logger.log(`Token approval successful. TX: ${txHash}`);
-
-      return {
-        success: true,
-
-        transactionHash: txHash,
-      };
-    } catch (error) {
-      this.logger.error('Error approving tokens:', error);
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : 'Unknown error occurred',
-      };
-    }
-  }
-
-  /**
-   * Make ERC20 payment on behalf of user (using user's HD wallet)
-   * @param landId - Blockchain land ID
-   * @param userPrivateKey - User's private key (from HD wallet)
-   * @param amount - Payment amount (in base token units, will be converted based on decimals)
-   * @returns Payment result with transaction hash
-   */
-  async makeERC20Payment(
-    landId: number,
-    userPrivateKey: string,
-    amount: bigint,
-  ): Promise<MakePaymentResult> {
-    if (!this.isContractAvailable() || !this.provider) {
-      return {
-        success: false,
-        error: 'Smart contract not available',
-      };
-    }
-
-    const tokenAddress = this.configService.get<string>(
-      'PAYMENT_TOKEN_ADDRESS',
-    );
-    if (!tokenAddress) {
-      return {
-        success: false,
-        error: 'PAYMENT_TOKEN_ADDRESS not configured',
-      };
-    }
-
-    try {
-      const userSigner = this.getUserSigner(userPrivateKey);
-
-      // Get token contract to check decimals
-      const tokenContract = new ethers.Contract(
-        tokenAddress,
-        ERC20_ABI,
-        this.provider,
-      );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const decimals = await tokenContract.decimals();
-      const amountWithDecimals = amount * BigInt(10 ** Number(decimals));
-
-      // First, ensure tokens are approved
-      const approveResult = await this.approveTokenForContract(
-        userPrivateKey,
-        amount,
-      );
-
-      if (!approveResult.success && !approveResult.transactionHash) {
-        // Approval failed and no transaction was made (already approved is OK)
-        if (approveResult.error && !approveResult.error.includes('already')) {
-          return approveResult;
-        }
-      }
-
-      // Call makePayment on contract (admin calls on behalf of buyer)
-      // Note: Buyer must have approved tokens for the contract first
-      const tx = (await this.contract!.makePayment(
-        landId,
-        userSigner.address,
-        amountWithDecimals,
-      )) as ethers.ContractTransactionResponse;
-
-      this.logger.log(
-        `Making payment of ${amountWithDecimals} tokens (${amount} with ${decimals} decimals) for land ${landId} by user ${userSigner.address}. TX: ${tx.hash}`,
-      );
-
-      const receipt = (await tx.wait()) as ethers.ContractTransactionReceipt;
-
-      if (!receipt || receipt.status !== 1) {
-        return {
-          success: false,
-          error: 'Payment transaction failed',
-        };
-      }
-
-      this.logger.log(
-        `ERC20 payment successful for land ${landId}. TX: ${tx.hash}`,
-      );
-
-      return {
-        success: true,
-        transactionHash: tx.hash,
-      };
-    } catch (error) {
-      this.logger.error('Error making ERC20 payment:', error);
       return {
         success: false,
         error:
@@ -1883,97 +2144,6 @@ export class BlockchainService {
       };
     } catch (error) {
       this.logger.error('Error setting penalty basis points:', error);
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : 'Unknown error occurred',
-      };
-    }
-  }
-
-  /**
-   * Mint ERC20 tokens to a specific address (admin only)
-   * @param toAddress - Address to mint tokens to
-   * @param amount - Amount to mint (in token units, will be converted based on decimals)
-   * @returns Mint result with transaction hash
-   */
-  async mintToken(toAddress: string, amount: bigint): Promise<MintTokenResult> {
-    if (!this.isContractAvailable() || !this.provider) {
-      return {
-        success: false,
-        error: 'Blockchain service not available',
-      };
-    }
-
-    const tokenAddress = this.configService.get<string>(
-      'PAYMENT_TOKEN_ADDRESS',
-    );
-    if (!tokenAddress) {
-      return {
-        success: false,
-        error: 'PAYMENT_TOKEN_ADDRESS not configured',
-      };
-    }
-
-    try {
-      // Validate address format
-      if (!ethers.isAddress(toAddress)) {
-        return {
-          success: false,
-          error: 'Invalid recipient address format',
-        };
-      }
-
-      // Get token contract with admin signer
-      const tokenContract = new ethers.Contract(
-        tokenAddress,
-        ERC20_ABI,
-        this.signer,
-      );
-
-      // Verify that the signer is the owner of the token contract
-
-      const owner = (await tokenContract.owner()) as string;
-      if (owner.toLowerCase() !== this.signer!.address.toLowerCase()) {
-        return {
-          success: false,
-          error: `Admin address ${this.signer!.address} is not the token owner. Token owner: ${owner}`,
-        };
-      }
-
-      // Get token decimals
-
-      const decimals = (await tokenContract.decimals()) as bigint;
-      const amountWithDecimals = amount * BigInt(10 ** Number(decimals));
-
-      // Mint tokens
-      const tx = (await tokenContract.mint(
-        toAddress,
-        amountWithDecimals,
-      )) as ethers.ContractTransactionResponse;
-
-      const txHash = tx.hash;
-      this.logger.log(
-        `Minting ${amountWithDecimals} tokens (${amount} with ${decimals} decimals) to ${toAddress}. TX: ${txHash}`,
-      );
-
-      const receipt = await tx.wait();
-
-      if (!receipt || receipt.status !== 1) {
-        return {
-          success: false,
-          error: 'Mint transaction failed',
-        };
-      }
-
-      this.logger.log(`Token mint successful. TX: ${txHash}`);
-
-      return {
-        success: true,
-        transactionHash: txHash,
-      };
-    } catch (error) {
-      this.logger.error('Error minting tokens:', error);
       return {
         success: false,
         error:

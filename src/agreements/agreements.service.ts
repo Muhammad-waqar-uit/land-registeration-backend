@@ -536,6 +536,39 @@ This document is digitally stored and verifiable on the blockchain.
         agreement.property.status = LandStatus.PAYMENT_IN_PROGRESS;
         await this.landRepository.save(agreement.property);
       }
+
+      // Record trade in ledger (LandLedgerLite) so payments can be linked
+      if (
+        this.blockchainService.isLedgerAvailable() &&
+        agreement.builder?.walletAddress &&
+        agreement.buyer?.walletAddress
+      ) {
+        try {
+          const priceInBaseUnits = BigInt(
+            Math.floor(Number(agreement.property.price) * 1e18),
+          );
+          const result = await this.blockchainService.ledgerRecordTrade(
+            agreement.property.id,
+            agreement.builder.walletAddress,
+            agreement.buyer.walletAddress,
+            priceInBaseUnits,
+            false,
+            agreementId,
+            agreement.builder.walletAddress, // builder: ledger registers property if missing
+          );
+          if (result.success) {
+            console.log(
+              `Ledger: trade recorded for agreement ${agreementId}. TX: ${result.transactionHash}`,
+            );
+          } else {
+            console.warn(
+              `Ledger: failed to record trade for agreement ${agreementId}: ${result.error}`,
+            );
+          }
+        } catch (error) {
+          console.error('Ledger: error recording trade on agreement sign:', error);
+        }
+      }
     } else {
       agreement.status = AgreementStatus.PENDING_SIGNATURE;
     }

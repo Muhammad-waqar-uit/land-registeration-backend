@@ -23,6 +23,7 @@ import { OwnershipDocumentResponseDto } from './dto/ownership-document-response.
 import { FileStorageService } from '../common/services/file-storage.service';
 import { HashService } from '../common/services/hash.service';
 import { IpfsService } from '../common/services/ipfs.service';
+import { BlockchainService } from '../common/services/blockchain.service';
 
 @Injectable()
 export class OwnershipDocumentsService {
@@ -38,16 +39,18 @@ export class OwnershipDocumentsService {
         private fileStorageService: FileStorageService,
         private hashService: HashService,
         private ipfsService: IpfsService,
+        private blockchainService: BlockchainService,
     ) { }
 
     /**
-     * Builder uploads ownership documents for a property after payment completion
+     * Builder or Admin uploads ownership documents for a property after payment completion
      */
     async uploadOwnershipDocuments(
         landId: string,
-        builderId: string,
+        userId: string,
         createDto: CreateOwnershipDocumentDto,
         files: Express.Multer.File[],
+        userRole?: UserRole,
     ): Promise<OwnershipDocumentResponseDto> {
         // Verify property exists
         const property = await this.landRepository.findOne({
@@ -58,20 +61,31 @@ export class OwnershipDocumentsService {
             throw new NotFoundException('Property not found');
         }
 
-        // Verify builder authorization
-        const builder = await this.userRepository.findOne({
-            where: { id: builderId },
-        });
-
-        if (!builder || !builder.isBuilderVerified) {
-            throw new ForbiddenException('Only verified builders can upload ownership documents');
-        }
-
-        // Verify builder owns the property (original builder)
         const originalBuilderId = property.originalOwnerId || property.ownerId;
-        if (originalBuilderId !== builderId) {
-            throw new ForbiddenException('Only the original builder can upload ownership documents');
+
+        // Admin can upload on behalf; Builder must be verified and must be the original builder
+        if (userRole === UserRole.ADMIN) {
+            if (!originalBuilderId) {
+                throw new BadRequestException(
+                    'Property has no owner/builder. Cannot upload ownership documents.',
+                );
+            }
+        } else {
+            const builder = await this.userRepository.findOne({
+                where: { id: userId },
+            });
+
+            if (!builder || !builder.isBuilderVerified) {
+                throw new ForbiddenException('Only verified builders can upload ownership documents');
+            }
+
+            if (originalBuilderId !== userId) {
+                throw new ForbiddenException('Only the original builder can upload ownership documents');
+            }
         }
+
+        // Use original builder as uploader when Admin uploads on behalf; otherwise the logged-in builder
+        const uploaderId = userRole === UserRole.ADMIN ? originalBuilderId : userId;
 
         // Verify payment is completed
         if (property.agreementStatus !== AgreementStatus.COMPLETED) {
@@ -110,7 +124,7 @@ export class OwnershipDocumentsService {
         // Create ownership document entity
         const ownershipDoc = this.ownershipDocRepository.create({
             landId: landId,
-            uploaderId: builderId,
+            uploaderId: uploaderId,
             buyerId: createDto.buyerId,
             documentType: OwnershipDocumentType.INITIAL_OWNERSHIP,
             status: OwnershipDocumentStatus.PENDING_ADMIN_APPROVAL,
@@ -243,6 +257,38 @@ export class OwnershipDocumentsService {
             property.status = LandStatus.OWNED;
 
             await this.landRepository.save(property);
+
+            // Update ledger (LandLedgerLite) so on-chain owner matches DB
+            const buyer = ownershipDoc.buyer;
+            const builderOrSellerWallet = ownershipDoc.uploader?.walletAddress; // builder/seller for ledger register-if-missing
+            if (
+                this.blockchainService.isLedgerAvailable() &&
+                buyer?.walletAddress
+            ) {
+                try {
+                    const result =
+                        await this.blockchainService.ledgerUpdatePropertyOwner(
+                            property.id,
+                            buyer.walletAddress,
+                            false,
+                            builderOrSellerWallet,
+                        );
+                    if (result.success) {
+                        console.log(
+                            `Ledger: property owner updated for land ${property.id} to buyer. TX: ${result.transactionHash}`,
+                        );
+                    } else {
+                        console.warn(
+                            `Ledger: failed to update property owner for land ${property.id}: ${result.error}`,
+                        );
+                    }
+                } catch (error) {
+                    console.error(
+                        'Ledger: error updating property owner on ownership doc approve:',
+                        error,
+                    );
+                }
+            }
 
             // TODO: Send notification to builder and buyer
 

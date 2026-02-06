@@ -1,7 +1,9 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -20,22 +22,39 @@ import { UserRole } from '../entities/user.entity';
 import { TokensService } from './tokens.service';
 import { MintTokenDto } from './dto/mint-token.dto';
 import { MintTokenResponseDto } from './dto/mint-response.dto';
+import { GetBalanceDto } from './dto/get-balance.dto';
+import { BalanceResponseDto } from './dto/balance-response.dto';
 
-@ApiTags('Tokens', 'ERC20')
+@ApiTags('Tokens', 'Points')
 @Controller('tokens')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('JWT-auth')
 export class TokensController {
   constructor(private readonly tokensService: TokensService) {}
 
+  @Get('balance')
+  @ApiOperation({
+    summary: 'Get points balance for a wallet address',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Balance retrieved successfully',
+    type: BalanceResponseDto,
+  })
+  async getBalance(
+    @Query() getBalanceDto: GetBalanceDto,
+  ): Promise<BalanceResponseDto> {
+    return this.tokensService.getBalance(getBalanceDto);
+  }
+
   @Post('mint')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Mint ERC20 tokens to a specific address (Admin only)',
+    summary: 'Mint points to a specific address (Admin only)',
     description:
-      'Mints new tokens to the specified address. Only admins can perform this operation.',
+      'Mints new points to the specified address in the LandLedgerLite contract. Only admins can perform this operation.',
   })
   @ApiBody({
     type: MintTokenDto,
@@ -43,7 +62,7 @@ export class TokensController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Tokens minted successfully',
+    description: 'Points minted successfully',
     type: MintTokenResponseDto,
   })
   @ApiResponse({

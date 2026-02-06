@@ -6,9 +6,7 @@ import { OwnershipDocument } from '../entities/ownership-document.entity';
 import { OwnershipDocumentFile } from '../entities/ownership-document-file.entity';
 import { Land } from '../entities/land.entity';
 import { User } from '../entities/user.entity';
-import { FileStorageService } from '../common/services/file-storage.service';
-import { HashService } from '../common/services/hash.service';
-import { IpfsService } from '../common/services/ipfs.service';
+import { CommonModule } from '../common/common.module';
 
 @Module({
     imports: [
@@ -18,14 +16,10 @@ import { IpfsService } from '../common/services/ipfs.service';
             Land,
             User,
         ]),
+        CommonModule,
     ],
     controllers: [OwnershipDocumentsController],
-    providers: [
-        OwnershipDocumentsService,
-        FileStorageService,
-        HashService,
-        IpfsService,
-    ],
+    providers: [OwnershipDocumentsService],
     exports: [OwnershipDocumentsService],
 })
 export class OwnershipDocumentsModule { }

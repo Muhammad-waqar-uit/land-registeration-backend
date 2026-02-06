@@ -45,12 +45,14 @@ export class OwnershipDocumentsController {
             throw new BadRequestException('At least one file is required');
         }
 
-        const builderId = req.user.userId;
+        const userId = req.user.id;
+        const userRole = req.user.role;
         return this.ownershipDocumentsService.uploadOwnershipDocuments(
             landId,
-            builderId,
+            userId,
             createDto,
             files,
+            userRole,
         );
     }
 
@@ -65,7 +67,7 @@ export class OwnershipDocumentsController {
         @Body() reviewDto: AdminReviewDto,
         @Req() req: any,
     ): Promise<OwnershipDocumentResponseDto> {
-        const adminId = req.user.userId;
+        const adminId = req.user.id;
         return this.ownershipDocumentsService.adminReview(id, adminId, reviewDto);
     }
 
@@ -110,7 +112,7 @@ export class OwnershipDocumentsController {
     @Get('builder/me')
     @Roles(UserRole.BUILDER, UserRole.ADMIN)
     async getMyDocuments(@Req() req: any): Promise<OwnershipDocumentResponseDto[]> {
-        const builderId = req.user.userId;
+        const builderId = req.user.id;
         return this.ownershipDocumentsService.findByBuilder(builderId);
     }
 }

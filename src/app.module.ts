@@ -21,6 +21,7 @@ import { BuyersModule } from './buyers/buyers.module';
 import { TokenRequestsModule } from './token-requests/token-requests.module';
 import { TransferRequestsModule } from './transfer-requests/transfer-requests.module';
 import { OwnershipDocumentsModule } from './ownership-documents/ownership-documents.module';
+import { UserBankInfoModule } from './user-bank-info/user-bank-info.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { OwnershipDocumentsModule } from './ownership-documents/ownership-docume
     TokenRequestsModule,
     TransferRequestsModule,
     OwnershipDocumentsModule,
+    UserBankInfoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

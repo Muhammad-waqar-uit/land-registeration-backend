@@ -1,0 +1,74 @@
+═══════════════════════════════════════════════════════════════
+            FINAL OWNERSHIP TRANSFER AGREEMENT
+                        [SIGNED COPY]
+═══════════════════════════════════════════════════════════════
+
+Date: February 1, 2026
+Agreement ID: 51014773-2dcf-4da8-8356-334bcaa6b908
+Agreement Type: Final Ownership Agreement
+Status: SIGNED
+
+───────────────────────────────────────────────────────────────
+PARTIES
+───────────────────────────────────────────────────────────────
+
+SELLER (BUILDER):
+  Name: Aman khan
+  Company: ABC Construction LDT
+  License Number: AUTO-GENERATED-LICENSE
+
+BUYER (NEW OWNER):
+  Name: Muhammad Waqar
+  Father's Name: Ghaffar
+  CNIC: 40121-2122312-3
+  Phone: +92341412323232
+
+───────────────────────────────────────────────────────────────
+PROPERTY DETAILS
+───────────────────────────────────────────────────────────────
+
+Property Title: First Land
+Unit ID: NP-1
+Location: near joher
+Size: 125.00 sq. meters
+
+───────────────────────────────────────────────────────────────
+OWNERSHIP TRANSFER
+───────────────────────────────────────────────────────────────
+
+WHEREAS all payments have been completed, ownership of the above-described property is hereby transferred from the Builder to the Buyer.
+
+Total Amount Paid: 40000
+Payment Status: FULLY PAID
+
+───────────────────────────────────────────────────────────────
+TERMS AND CONDITIONS
+───────────────────────────────────────────────────────────────
+
+1. This agreement represents the final ownership transfer.
+
+2. The buyer is now the legal owner of the property.
+
+3. All ownership rights and responsibilities are transferred to the buyer.
+
+4. This agreement supersedes any previous agreements.
+
+───────────────────────────────────────────────────────────────
+DIGITAL SIGNATURES
+───────────────────────────────────────────────────────────────
+
+Builder Signature: ✓ SIGNED
+  Signed At: February 1, 2026 at 09:28 PM
+  Signature Hash: 70c67ec8b86e9c7a8fe1482f641520ace575daa1bd44e8e36bdbabe941e8ce55
+
+Buyer Signature:   ✓ SIGNED
+  Signed At: February 1, 2026 at 09:31 PM
+  Signature Hash: 4ab312ead9162f78eed22c35e5a17e2a23eb4fd8a61c45d576886ff58182eec7
+
+Document Hash (SHA-256): 7d55831c7a17037c2a490d416170d4e012bfabdb62cd87775b0d3db985133de2
+Signed Document Hash (SHA-256): 47f06adee3c10f11de19880b4e3686207bf079a6e70140e23d9c29962442fa59
+
+═══════════════════════════════════════════════════════════════
+This document is digitally signed and stored immutably on IPFS.
+Blockchain Transaction: Pending
+═══════════════════════════════════════════════════════════════

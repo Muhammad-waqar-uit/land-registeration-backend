@@ -1,0 +1,74 @@
+═══════════════════════════════════════════════════════════════
+            FINAL OWNERSHIP TRANSFER AGREEMENT
+                        [SIGNED COPY]
+═══════════════════════════════════════════════════════════════
+
+Date: February 6, 2026
+Agreement ID: f59f3ddf-3424-4012-9053-4ed1eea9b76f
+Agreement Type: Final Ownership Agreement
+Status: SIGNED
+
+───────────────────────────────────────────────────────────────
+PARTIES
+───────────────────────────────────────────────────────────────
+
+SELLER (BUILDER):
+  Name: Aman khan
+  Company: ABC Construction LDT
+  License Number: AUTO-GENERATED-LICENSE
+
+BUYER (NEW OWNER):
+  Name: Muhammad Waqar
+  Father's Name: Ghaffar
+  CNIC: 40121-2122312-3
+  Phone: +92341412323232
+
+───────────────────────────────────────────────────────────────
+PROPERTY DETAILS
+───────────────────────────────────────────────────────────────
+
+Property Title: New project
+Unit ID: NP-1
+Location: karachi
+Size: 200.00 sq. meters
+
+───────────────────────────────────────────────────────────────
+OWNERSHIP TRANSFER
+───────────────────────────────────────────────────────────────
+
+WHEREAS all payments have been completed, ownership of the above-described property is hereby transferred from the Builder to the Buyer.
+
+Total Amount Paid: 500000
+Payment Status: FULLY PAID
+
+───────────────────────────────────────────────────────────────
+TERMS AND CONDITIONS
+───────────────────────────────────────────────────────────────
+
+1. This agreement represents the final ownership transfer.
+
+2. The buyer is now the legal owner of the property.
+
+3. All ownership rights and responsibilities are transferred to the buyer.
+
+4. This agreement supersedes any previous agreements.
+
+───────────────────────────────────────────────────────────────
+DIGITAL SIGNATURES
+───────────────────────────────────────────────────────────────
+
+Builder Signature: ✓ SIGNED
+  Signed At: February 6, 2026 at 03:12 AM
+  Signature Hash: 613bfe329d64ec7350503357206c0bc6679946c7f2a4191dd61784e4ad479f87
+
+Buyer Signature:   ✓ SIGNED
+  Signed At: February 6, 2026 at 03:13 AM
+  Signature Hash: aaedee64badfcc07f2083f4d7e5b3f8b3bcce5aec0dd391962cc5fc4c9d5b813
+
+Document Hash (SHA-256): 3e54eadd4a50fcd9e24ed899fb5e7963df708431456b03b82c58453992cf753a
+Signed Document Hash (SHA-256): 47f06adee3c10f11de19880b4e3686207bf079a6e70140e23d9c29962442fa59
+
+═══════════════════════════════════════════════════════════════
+This document is digitally signed and stored immutably on IPFS.
+Blockchain Transaction: Pending
+═══════════════════════════════════════════════════════════════

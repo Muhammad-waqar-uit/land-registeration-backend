@@ -31,6 +31,7 @@ import {
   TransferAdminReviewDto,
   TransferAdminAction,
 } from './dto/transfer-admin-review.dto';
+import { BlockchainService } from '../common/services/blockchain.service';
 
 @Injectable()
 export class TransferRequestsService {
@@ -48,6 +49,7 @@ export class TransferRequestsService {
     private fileStorageService: FileStorageService,
     private hashService: HashService,
     private ipfsService: IpfsService,
+    private blockchainService: BlockchainService,
   ) { }
 
   /**
@@ -363,7 +365,7 @@ export class TransferRequestsService {
   ): Promise<TransferRequestResponseDto> {
     const transferRequest = await this.transferRequestRepository.findOne({
       where: { id: transferRequestId },
-      relations: ['resaleRequest', 'property', 'documents'],
+      relations: ['resaleRequest', 'property', 'documents', 'newOwner'],
     });
 
     if (!transferRequest) {
@@ -404,6 +406,44 @@ export class TransferRequestsService {
     property.isResale = false; // No longer listed for resale
 
     await this.landRepository.save(property);
+
+    // Update ledger (LandLedgerLite) for resale – new owner on-chain
+    const newOwner = transferRequest.newOwner;
+    const originalBuilder = originalBuilderId
+      ? await this.userRepository.findOne({
+          where: { id: originalBuilderId },
+          select: ['walletAddress'],
+        })
+      : null;
+    const builderWallet = originalBuilder?.walletAddress;
+    if (
+      this.blockchainService.isLedgerAvailable() &&
+      newOwner?.walletAddress
+    ) {
+      try {
+        const result =
+          await this.blockchainService.ledgerUpdatePropertyOwner(
+            property.id,
+            newOwner.walletAddress,
+            true, // isResale
+            builderWallet,
+          );
+        if (result.success) {
+          console.log(
+            `Ledger: property owner updated (resale) for land ${property.id}. TX: ${result.transactionHash}`,
+          );
+        } else {
+          console.warn(
+            `Ledger: failed to update property owner (resale) for land ${property.id}: ${result.error}`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Ledger: error updating property owner on transfer complete:',
+          error,
+        );
+      }
+    }
 
     // Update transfer request
     transferRequest.status = TransferRequestStatus.COMPLETED;

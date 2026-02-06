@@ -558,7 +558,7 @@ See `.env.example` for a complete template with detailed instructions on how to 
 | `EMAIL_PORT` | SMTP port | 587 |
 | `IPFS_GATEWAY` | IPFS gateway URL | `https://gateway.pinata.cloud/ipfs/` |
 | `BLOCKCHAIN_NETWORK` | Blockchain network name | `sepolia` (or `mainnet`, `localhost`) |
-| `PAYMENT_TOKEN_ADDRESS` | ERC-20 token address (for payments) | Required if using crypto payments |
+| `LEDGER_CONTRACT_ADDRESS` | LandLedgerLite contract (points/ledger) | Optional; for points recording |
 
 ### Database Setup
 
@@ -644,7 +644,7 @@ See `GMAIL_SETUP.md` for detailed Gmail setup instructions.
    BLOCKCHAIN_PRIVATE_KEY=0x...your-private-key...
    CONTRACT_ADDRESS=0x...deployed-contract-address...
    BLOCKCHAIN_NETWORK=sepolia
-   PAYMENT_TOKEN_ADDRESS=0x...erc20-token-address...  # Optional, for crypto payments
+   LEDGER_CONTRACT_ADDRESS=0x...  # Optional; for ledger points recording
    ```
 
 **Note:** Smart contract must be deployed before using blockchain features. See `smart-contract/smart-contract.sol` for contract source.
@@ -848,7 +848,7 @@ See `GMAIL_SETUP.md` for detailed Gmail setup instructions.
 2. **Smart Contract:**
    - Deploy upgraded contract to blockchain network
    - Update `CONTRACT_ADDRESS` in environment variables
-   - Ensure `PAYMENT_TOKEN_ADDRESS` is set if using crypto payments
+   - Set `LEDGER_CONTRACT_ADDRESS` if using ledger points recording
 
 3. **Environment Variables:**
    - Set `NODE_ENV=production`

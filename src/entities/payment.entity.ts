@@ -20,7 +20,7 @@ export enum PaymentStatus {
 
 export enum PaymentMode {
   BANK = 'bank',
-  CRYPTO = 'crypto',
+  POINTS = 'points',
 }
 
 @Entity('payments')

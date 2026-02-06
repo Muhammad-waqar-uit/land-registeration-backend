@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateTokenRequestDto {
   @ApiProperty({
-    description: 'Amount of ERC20 tokens requested',
+    description: 'Amount of points requested (ledger points)',
     example: 1000.0,
     minimum: 0.01,
   })
@@ -12,8 +12,8 @@ export class CreateTokenRequestDto {
   amount: number;
 
   @ApiPropertyOptional({
-    description: 'Notes or reason for the token request',
-    example: 'Need tokens for property purchase payment',
+    description: 'Notes or reason for the points request',
+    example: 'Need points for property purchase payment',
   })
   @IsOptional()
   @IsString()

@@ -1,0 +1,63 @@
+═══════════════════════════════════════════════════════════════
+            FINAL OWNERSHIP TRANSFER AGREEMENT
+═══════════════════════════════════════════════════════════════
+
+Date: February 1, 2026
+Agreement Type: Final Ownership Agreement
+
+───────────────────────────────────────────────────────────────
+PARTIES
+───────────────────────────────────────────────────────────────
+
+SELLER (BUILDER):
+  Name: Aman khan
+  Company: ABC Construction LDT
+  License Number: AUTO-GENERATED-LICENSE
+
+BUYER (NEW OWNER):
+  Name: Muhammad Waqar
+  Father's Name: Ghaffar
+  CNIC: 40121-2122312-3
+  Phone: +92341412323232
+
+───────────────────────────────────────────────────────────────
+PROPERTY DETAILS
+───────────────────────────────────────────────────────────────
+
+Property Title: First Land
+Unit ID: NP-1
+Location: near joher
+Size: 125.00 sq. meters
+
+───────────────────────────────────────────────────────────────
+OWNERSHIP TRANSFER
+───────────────────────────────────────────────────────────────
+
+WHEREAS all payments have been completed, ownership of the above-described property is hereby transferred from the Builder to the Buyer.
+
+Total Amount Paid: 40000
+Payment Status: FULLY PAID
+
+───────────────────────────────────────────────────────────────
+TERMS AND CONDITIONS
+───────────────────────────────────────────────────────────────
+
+1. This agreement represents the final ownership transfer.
+
+2. The buyer is now the legal owner of the property.
+
+3. All ownership rights and responsibilities are transferred to the buyer.
+
+4. This agreement supersedes any previous agreements.
+
+───────────────────────────────────────────────────────────────
+SIGNATURES
+───────────────────────────────────────────────────────────────
+
+Builder Signature: ___________________ Date: ___________
+
+Buyer Signature:   ___________________ Date: ___________
+
+═══════════════════════════════════════════════════════════════
+This document is digitally stored and verifiable on the blockchain.
+═══════════════════════════════════════════════════════════════
