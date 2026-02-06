@@ -35,8 +35,11 @@ export class OwnershipHistory {
   })
   transferType: TransferType;
 
-  @Column({ type: 'uuid' })
-  agreementId: string; // FK to Agreement
+  @Column({ type: 'uuid', nullable: true })
+  agreementId: string | null; // FK to Agreement (first sale)
+
+  @Column({ type: 'uuid', nullable: true })
+  transferRequestId: string | null; // FK to TransferRequest (resale)
 
   @Column({ type: 'varchar', length: 66, nullable: true })
   blockchainTxHash: string | null; // Transaction hash for ownership transfer on blockchain
@@ -60,7 +63,12 @@ export class OwnershipHistory {
   @JoinColumn({ name: 'toOwnerId' })
   toOwner: User; // New owner
 
-  @ManyToOne(() => Agreement, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Agreement, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'agreementId' })
-  agreement: Agreement;
+  agreement: Agreement | null;
+
+  // TransferRequest relation for resale (optional to avoid circular dep in entity)
+  // @ManyToOne(() => TransferRequest, { onDelete: 'SET NULL', nullable: true })
+  // @JoinColumn({ name: 'transferRequestId' })
+  // transferRequest: TransferRequest | null;
 }

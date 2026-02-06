@@ -8,6 +8,7 @@ import { TransferDocument } from '../entities/transfer-document.entity';
 import { ResaleRequest } from '../entities/resale-request.entity';
 import { Land } from '../entities/land.entity';
 import { User } from '../entities/user.entity';
+import { OwnershipHistory } from '../entities/ownership-history.entity';
 import { CommonModule } from '../common/common.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { CommonModule } from '../common/common.module';
       ResaleRequest,
       Land,
       User,
+      OwnershipHistory,
     ]),
     MulterModule.register({
       dest: './uploads/transfer-docs',

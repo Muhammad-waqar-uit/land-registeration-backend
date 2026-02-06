@@ -104,7 +104,7 @@ export class ResaleRequestsService {
 
     const savedRequest = await this.resaleRequestRepository.save(resaleRequest);
 
-    return ResaleRequestResponseDto.fromEntity(savedRequest);
+    return ResaleRequestResponseDto.fromEntity(savedRequest, false);
   }
 
   /**
@@ -156,7 +156,7 @@ export class ResaleRequestsService {
 
     const savedRequest = await this.resaleRequestRepository.save(request);
 
-    return ResaleRequestResponseDto.fromEntity(savedRequest);
+    return ResaleRequestResponseDto.fromEntity(savedRequest, false);
   }
 
   /**
@@ -198,10 +198,13 @@ export class ResaleRequestsService {
       throw new NotFoundException('Property not found');
     }
 
-    // Update property for resale
+    // Update property for resale and reset payment state for new buyer
     property.status = LandStatus.RESALE_LISTED;
     property.isResale = true;
     property.price = request.requestedPrice; // Update price to resale price
+    property.totalPaid = 0;
+    property.remainingBalance = request.requestedPrice;
+    property.resaleListedAt = new Date();
 
     await this.landRepository.save(property);
 
@@ -211,7 +214,7 @@ export class ResaleRequestsService {
 
     const savedRequest = await this.resaleRequestRepository.save(request);
 
-    return ResaleRequestResponseDto.fromEntity(savedRequest);
+    return ResaleRequestResponseDto.fromEntity(savedRequest, false);
   }
 
   /**
@@ -263,7 +266,7 @@ export class ResaleRequestsService {
 
     const savedRequest = await this.resaleRequestRepository.save(request);
 
-    return ResaleRequestResponseDto.fromEntity(savedRequest);
+    return ResaleRequestResponseDto.fromEntity(savedRequest, false);
   }
 
   /**
@@ -305,10 +308,13 @@ export class ResaleRequestsService {
       throw new NotFoundException('Property not found');
     }
 
-    // Update property for resale
+    // Update property for resale and reset payment state for new buyer
     property.status = LandStatus.RESALE_LISTED;
     property.isResale = true;
     property.price = request.requestedPrice; // Update price to resale price
+    property.totalPaid = 0;
+    property.remainingBalance = request.requestedPrice;
+    property.resaleListedAt = new Date();
 
     await this.landRepository.save(property);
 
@@ -318,11 +324,11 @@ export class ResaleRequestsService {
 
     const savedRequest = await this.resaleRequestRepository.save(request);
 
-    return ResaleRequestResponseDto.fromEntity(savedRequest);
+    return ResaleRequestResponseDto.fromEntity(savedRequest, false);
   }
 
   /**
-   * List property owner's resale requests
+   * List property owner's resale requests (includes property, owner, builder details)
    */
   async findOwnerResaleRequests(
     ownerId: string,
@@ -338,7 +344,11 @@ export class ResaleRequestsService {
     const queryBuilder =
       this.resaleRequestRepository.createQueryBuilder('request');
 
-    queryBuilder.where('request.currentOwnerId = :ownerId', { ownerId });
+    queryBuilder
+      .leftJoinAndSelect('request.property', 'property')
+      .leftJoinAndSelect('request.currentOwner', 'currentOwner')
+      .leftJoinAndSelect('request.builder', 'builder')
+      .where('request.currentOwnerId = :ownerId', { ownerId });
 
     if (status) {
       queryBuilder.andWhere('request.status = :status', { status });
@@ -356,7 +366,7 @@ export class ResaleRequestsService {
 
     return {
       data: requests.map((request) =>
-        ResaleRequestResponseDto.fromEntity(request),
+        ResaleRequestResponseDto.fromEntity(request, true),
       ),
       total,
       page,
@@ -365,7 +375,7 @@ export class ResaleRequestsService {
   }
 
   /**
-   * List builder's resale requests
+   * List builder's resale requests (includes property, owner, builder details)
    */
   async findBuilderResaleRequests(
     builderId: string,
@@ -381,7 +391,11 @@ export class ResaleRequestsService {
     const queryBuilder =
       this.resaleRequestRepository.createQueryBuilder('request');
 
-    queryBuilder.where('request.builderId = :builderId', { builderId });
+    queryBuilder
+      .leftJoinAndSelect('request.property', 'property')
+      .leftJoinAndSelect('request.currentOwner', 'currentOwner')
+      .leftJoinAndSelect('request.builder', 'builder')
+      .where('request.builderId = :builderId', { builderId });
 
     if (status) {
       queryBuilder.andWhere('request.status = :status', { status });
@@ -399,7 +413,7 @@ export class ResaleRequestsService {
 
     return {
       data: requests.map((request) =>
-        ResaleRequestResponseDto.fromEntity(request),
+        ResaleRequestResponseDto.fromEntity(request, true),
       ),
       total,
       page,
@@ -408,7 +422,7 @@ export class ResaleRequestsService {
   }
 
   /**
-   * Find all resale requests with filters (admin or general query)
+   * Find all resale requests with filters (admin or general query, includes details)
    */
   async findAll(query: QueryResaleRequestsDto): Promise<{
     data: ResaleRequestResponseDto[];
@@ -427,6 +441,11 @@ export class ResaleRequestsService {
 
     const queryBuilder =
       this.resaleRequestRepository.createQueryBuilder('request');
+
+    queryBuilder
+      .leftJoinAndSelect('request.property', 'property')
+      .leftJoinAndSelect('request.currentOwner', 'currentOwner')
+      .leftJoinAndSelect('request.builder', 'builder');
 
     if (status) {
       queryBuilder.where('request.status = :status', { status });
@@ -456,7 +475,7 @@ export class ResaleRequestsService {
 
     return {
       data: requests.map((request) =>
-        ResaleRequestResponseDto.fromEntity(request),
+        ResaleRequestResponseDto.fromEntity(request, true),
       ),
       total,
       page,
@@ -477,6 +496,6 @@ export class ResaleRequestsService {
       throw new NotFoundException('Resale request not found');
     }
 
-    return ResaleRequestResponseDto.fromEntity(request);
+    return ResaleRequestResponseDto.fromEntity(request, true);
   }
 }

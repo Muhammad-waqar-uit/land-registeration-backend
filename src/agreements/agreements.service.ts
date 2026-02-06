@@ -11,7 +11,11 @@ import {
   AgreementType,
   AgreementStatus,
 } from '../entities/agreement.entity';
-import { Land, LandStatus } from '../entities/land.entity';
+import {
+  Land,
+  LandStatus,
+  OwnershipChainEntry,
+} from '../entities/land.entity';
 import { User, UserRole } from '../entities/user.entity';
 import {
   OwnershipHistory,
@@ -65,7 +69,7 @@ export class AgreementsService {
       );
     }
 
-    // Verify property exists and belongs to builder
+    // Verify property exists and belongs to builder (or is resale – original builder)
     const property = await this.landRepository.findOne({
       where: { id: createAgreementDto.propertyId },
       relations: ['owner', 'project'],
@@ -75,18 +79,25 @@ export class AgreementsService {
       throw new NotFoundException('Property not found');
     }
 
-    if (property.ownerId !== builderId) {
-      throw new ForbiddenException('Property does not belong to this builder');
+    const isOwner = property.ownerId === builderId;
+    const isOriginalBuilder =
+      property.originalOwnerId != null &&
+      property.originalOwnerId === builderId;
+    if (!isOwner && !isOriginalBuilder) {
+      throw new ForbiddenException(
+        'Property does not belong to this builder (or you are not the original builder for this resale)',
+      );
     }
 
-    // Property should be in AGREEMENT_PENDING status (after approved request) or still AVAILABLE/RESERVED
+    // Property should be in AGREEMENT_PENDING (after approved request), AVAILABLE, RESERVED, or RESALE_LISTED (resale)
     if (
       property.status !== LandStatus.AVAILABLE &&
       property.status !== LandStatus.RESERVED &&
-      property.status !== LandStatus.AGREEMENT_PENDING
+      property.status !== LandStatus.AGREEMENT_PENDING &&
+      property.status !== LandStatus.RESALE_LISTED
     ) {
       throw new BadRequestException(
-        `Cannot create agreement for property with status "${property.status}". Property must be AVAILABLE, RESERVED, or AGREEMENT_PENDING.`,
+        `Cannot create agreement for property with status "${property.status}". Property must be AVAILABLE, RESERVED, AGREEMENT_PENDING, or RESALE_LISTED.`,
       );
     }
 
@@ -1260,6 +1271,7 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
 
     // Step 5.5 Flow Step 6: Update property ownerId
     const previousOwnerId = property.ownerId;
+    const nowIso = new Date().toISOString();
     property.ownerId = buyer.id;
     property.currentOwnerId = buyer.id;
     if (!property.originalOwnerId) {
@@ -1268,6 +1280,29 @@ Blockchain Transaction: ${agreement.blockchainTxHash || 'Pending'}
 
     // Step 5.5 Flow Step 8: Mark property as OWNED
     property.status = LandStatus.OWNED;
+
+    // Update ownership chain (builder → buyer, initial_sale)
+    const chain: OwnershipChainEntry[] = property.ownershipChain
+      ? [...property.ownershipChain]
+      : [];
+    const fromDateFirstOwner = property.createdAt
+      ? new Date(property.createdAt).toISOString()
+      : nowIso;
+    chain.push({
+      order: chain.length + 1,
+      ownerId: previousOwnerId,
+      fromDate: fromDateFirstOwner,
+      toDate: nowIso,
+      transferType: 'initial_sale',
+    });
+    chain.push({
+      order: chain.length + 2,
+      ownerId: buyer.id,
+      fromDate: nowIso,
+      toDate: null,
+      transferType: 'initial_sale',
+    });
+    property.ownershipChain = chain;
 
     // Create final ownership agreement
     const finalAgreement = this.agreementRepository.create({

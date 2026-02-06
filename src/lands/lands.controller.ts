@@ -109,6 +109,29 @@ export class LandsController {
     return this.landsService.findMyBuilderLands(query, user.id);
   }
 
+  @Get('available')
+  @ApiOperation({
+    summary: 'Get available & resale properties for purchase',
+    description:
+      'Returns properties that buyers can purchase: new (available) + resale listed. Use ?isResale=true for resale only.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of available and resale properties',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/LandResponseDto' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' },
+      },
+    },
+  })
+  getAvailable(@Query() query: QueryLandsDto) {
+    return this.landsService.findAvailable(query);
+  }
+
   @Get('admin/all')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)

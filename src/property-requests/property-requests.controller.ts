@@ -87,11 +87,11 @@ export class PropertyRequestsController {
 
   @Get('pending')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUILDER)
+  @Roles(UserRole.BUILDER, UserRole.USER)
   @ApiOperation({
-    summary: "Get builder's pending property requests (Builder only) ✅",
+    summary: 'Get pending property requests (Builder or Seller)',
     description:
-      "Get only pending property requests for builder's properties. For all statuses, use /builder/all endpoint.",
+      "Builder: new properties. Seller: resale properties you own. For all statuses, use /builder/all endpoint.",
   })
   @ApiResponse({
     status: 200,
@@ -121,12 +121,11 @@ export class PropertyRequestsController {
 
   @Get('builder/all')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUILDER)
+  @Roles(UserRole.BUILDER, UserRole.USER)
   @ApiOperation({
-    summary:
-      "Get all property requests for builder's properties (Builder only) ✅",
+    summary: 'Get all property requests for your properties',
     description:
-      "Get all property requests (pending, approved, rejected, cancelled) for builder's properties. Supports status filtering via query parameter.",
+      "Builder: new properties. Seller: resale properties. Supports status filtering via query parameter.",
   })
   @ApiResponse({
     status: 200,
@@ -220,9 +219,11 @@ export class PropertyRequestsController {
 
   @Post(':id/respond')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUILDER)
+  @Roles(UserRole.BUILDER, UserRole.USER)
   @ApiOperation({
-    summary: 'Respond to property request - Approve or Reject (Builder only)',
+    summary: 'Respond to property request - Approve or Reject',
+    description:
+      'Builder: for new properties. Seller or Builder: for resale properties.',
   })
   @ApiResponse({
     status: 200,
@@ -239,14 +240,14 @@ export class PropertyRequestsController {
     return this.propertyRequestsService.respondToPropertyRequest(
       id,
       respondDto,
-      user.id,
+      user.id, // Builder or Seller (for resale)
     );
   }
 
   @Post(':id/approve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'Approve property request (Builder only)' })
+  @Roles(UserRole.BUILDER, UserRole.USER)
+  @ApiOperation({ summary: 'Approve property request (Builder or Seller for resale)' })
   @ApiResponse({
     status: 200,
     description: 'Property request approved',
@@ -267,8 +268,8 @@ export class PropertyRequestsController {
 
   @Post(':id/reject')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.BUILDER)
-  @ApiOperation({ summary: 'Reject property request (Builder only)' })
+  @Roles(UserRole.BUILDER, UserRole.USER)
+  @ApiOperation({ summary: 'Reject property request (Builder or Seller for resale)' })
   @ApiResponse({
     status: 200,
     description: 'Property request rejected',

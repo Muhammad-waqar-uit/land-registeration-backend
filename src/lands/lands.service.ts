@@ -95,6 +95,67 @@ export class LandsService {
     return unitId;
   }
 
+  /**
+   * Get properties available for purchase: new (available) + resale (resale_listed)
+   */
+  async findAvailable(query: QueryLandsDto): Promise<{
+    data: LandResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const {
+      page = 1,
+      limit = 10,
+      projectId,
+      builderId,
+      minPrice,
+      maxPrice,
+      isResale,
+    } = query;
+
+    const queryBuilder = this.landRepository
+      .createQueryBuilder('land')
+      .leftJoinAndSelect('land.owner', 'owner')
+      .leftJoinAndSelect('land.project', 'project')
+      .leftJoinAndSelect('land.currentOwner', 'currentOwner')
+      .where('land.status IN (:...statuses)', {
+        statuses: [LandStatus.AVAILABLE, LandStatus.RESALE_LISTED],
+      });
+
+    if (projectId) {
+      queryBuilder.andWhere('land.projectId = :projectId', { projectId });
+    }
+    if (builderId) {
+      queryBuilder.andWhere(
+        '(land.ownerId = :builderId OR land.originalOwnerId = :builderId)',
+        { builderId },
+      );
+    }
+    if (isResale !== undefined) {
+      queryBuilder.andWhere('land.isResale = :isResale', { isResale });
+    }
+    if (minPrice !== undefined) {
+      queryBuilder.andWhere('land.price >= :minPrice', { minPrice });
+    }
+    if (maxPrice !== undefined) {
+      queryBuilder.andWhere('land.price <= :maxPrice', { maxPrice });
+    }
+
+    const [lands, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('land.createdAt', 'DESC')
+      .getManyAndCount();
+
+    return {
+      data: lands.map((land) => LandResponseDto.fromEntity(land)),
+      total,
+      page,
+      limit,
+    };
+  }
+
   async findAll(query: QueryLandsDto): Promise<{
     data: LandResponseDto[];
     total: number;
@@ -117,7 +178,14 @@ export class LandsService {
 
     // Apply filters
     if (status) {
-      queryBuilder.where('land.status = :status', { status });
+      // status=available → include both available AND resale_listed (purchasable properties)
+      if (status === LandStatus.AVAILABLE) {
+        queryBuilder.where('land.status IN (:...statuses)', {
+          statuses: [LandStatus.AVAILABLE, LandStatus.RESALE_LISTED],
+        });
+      } else {
+        queryBuilder.where('land.status = :status', { status });
+      }
     }
 
     if (projectId) {
@@ -1280,34 +1348,46 @@ export class LandsService {
       };
     }
 
-    if (property.status !== LandStatus.AVAILABLE) {
+    // Allow both new (available) and resale (resale_listed) properties
+    if (
+      property.status !== LandStatus.AVAILABLE &&
+      property.status !== LandStatus.RESALE_LISTED
+    ) {
       return {
         eligible: false,
-        message: `Property is not available (status: ${property.status})`,
+        message: `Property is not available for purchase (status: ${property.status})`,
         property,
       };
     }
 
-    if (property.isResale) {
-      return {
-        eligible: false,
-        message:
-          'This is a resale property. Use resale request process instead.',
-        property,
-      };
+    // New property: must belong to verified builder
+    if (property.status === LandStatus.AVAILABLE) {
+      const owner = await this.userRepository.findOne({
+        where: { id: property.ownerId },
+      });
+      if (
+        !owner ||
+        owner.role !== UserRole.BUILDER ||
+        !owner.isBuilderVerified
+      ) {
+        return {
+          eligible: false,
+          message:
+            'Property must belong to a verified builder to receive purchase requests',
+          property,
+        };
+      }
     }
 
-    const owner = await this.userRepository.findOne({
-      where: { id: property.ownerId },
-    });
-
-    if (!owner || owner.role !== UserRole.BUILDER || !owner.isBuilderVerified) {
-      return {
-        eligible: false,
-        message:
-          'Property must belong to a verified builder to receive purchase requests',
-        property,
-      };
+    // Resale property: must be listed (owner = seller)
+    if (property.status === LandStatus.RESALE_LISTED) {
+      if (!property.ownerId) {
+        return {
+          eligible: false,
+          message: 'Resale property has no owner',
+          property,
+        };
+      }
     }
 
     return {

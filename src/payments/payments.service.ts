@@ -149,10 +149,14 @@ export class PaymentsService {
     const paymentSequenceNumber = existingPayments.length + 1;
 
     // Validate payment amount doesn't exceed remaining balance
-    const remainingBalance = land.remainingBalance ?? land.price;
+    // Use computed balance (resale: only payments after resaleListedAt) so we don't use stale land.remainingBalance
+    const balanceInfo = await this.calculateRemainingBalance(
+      createPaymentDto.landId,
+    );
+    const remainingBalance = balanceInfo.remainingBalance;
     if (createPaymentDto.amount > remainingBalance) {
       throw new BadRequestException(
-        `Payment amount (${createPaymentDto.amount}) exceeds remaining balance (${remainingBalance})`,
+        `Payment amount (${createPaymentDto.amount}) exceeds remaining balance (${remainingBalance.toFixed(2)})`,
       );
     }
 
@@ -228,9 +232,9 @@ export class PaymentsService {
       }
     }
 
-    // Determine if this is a full payment
-    const newTotalPaid = (land.totalPaid || 0) + createPaymentDto.amount;
-    const isFullPayment = newTotalPaid >= land.price;
+    // Determine if this is a full payment (use computed totalPaid for resale correctness)
+    const newTotalPaid = balanceInfo.totalPaid + createPaymentDto.amount;
+    const isFullPayment = newTotalPaid >= Number(land.price);
 
     const payment = this.paymentRepository.create({
       landId: createPaymentDto.landId,
@@ -319,7 +323,16 @@ export class PaymentsService {
     const verifiedPayments = await this.paymentRepository.find({
       where: { landId, status: PaymentStatus.VERIFIED },
     });
-    const totalPaid = verifiedPayments.reduce(
+
+    // For resale: only count payments after resaleListedAt (ignore first buyer's payments)
+    const cutoff =
+      land.resaleListedAt != null ? new Date(land.resaleListedAt) : null;
+    const paymentsToSum =
+      cutoff != null
+        ? verifiedPayments.filter((p) => new Date(p.createdAt) >= cutoff)
+        : verifiedPayments;
+
+    const totalPaid = paymentsToSum.reduce(
       (sum, p) => sum + Number(p.amount),
       0,
     );
@@ -573,7 +586,17 @@ export class PaymentsService {
       },
     });
 
-    const totalPaid = verifiedPayments.reduce(
+    // For resale: only count payments after resaleListedAt (ignore first buyer's payments)
+    const cutoff =
+      property.resaleListedAt != null
+        ? new Date(property.resaleListedAt)
+        : null;
+    const paymentsToSum =
+      cutoff != null
+        ? verifiedPayments.filter((p) => new Date(p.createdAt) >= cutoff)
+        : verifiedPayments;
+
+    const totalPaid = paymentsToSum.reduce(
       (sum, p) => sum + Number(p.amount),
       0,
     );

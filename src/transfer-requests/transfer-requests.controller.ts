@@ -22,9 +22,11 @@ import {
 } from '@nestjs/swagger';
 import { TransferRequestsService } from './transfer-requests.service';
 import { CreateTransferRequestDto } from './dto/create-transfer-request.dto';
+import { ConfirmPaymentAndTransferDto } from './dto/confirm-payment-transfer.dto';
 import { UploadDocumentsDto } from './dto/upload-documents.dto';
 import { QueryTransferRequestsDto } from './dto/query-transfer-requests.dto';
 import { TransferRequestResponseDto } from './dto/transfer-request-response.dto';
+import { TransferAdminReviewDto } from './dto/transfer-admin-review.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -39,9 +41,31 @@ export class TransferRequestsController {
     private readonly transferRequestsService: TransferRequestsService,
   ) {}
 
+  @Post('resale/:resaleRequestId/confirm-payment')
+  @ApiOperation({
+    summary: 'Seller confirms payment received and allows document change (payment-first flow)',
+    description:
+      'Seller must confirm full payment has been received before transfer documents can be uploaded. Creates transfer request. Full payment must be complete on the property.',
+  })
+  @ApiResponse({ status: 201, type: TransferRequestResponseDto })
+  @ApiResponse({ status: 400, description: 'Payment not complete or property not listed' })
+  async confirmPaymentAndAllowTransfer(
+    @Param('resaleRequestId') resaleRequestId: string,
+    @Body() confirmDto: ConfirmPaymentAndTransferDto,
+    @Req() req,
+  ): Promise<TransferRequestResponseDto> {
+    return this.transferRequestsService.confirmPaymentAndAllowTransfer(
+      resaleRequestId,
+      req.user.id,
+      confirmDto,
+    );
+  }
+
   @Post('resale/:resaleRequestId')
   @ApiOperation({
-    summary: 'Seller signs transfer request for property ownership transfer',
+    summary: 'Seller creates transfer request (without payment confirmation)',
+    description:
+      'Legacy: creates transfer request without payment check. Prefer confirm-payment for payment-first flow.',
   })
   @ApiResponse({ status: 201, type: TransferRequestResponseDto })
   async create(
@@ -164,6 +188,32 @@ export class TransferRequestsController {
     limit: number;
   }> {
     return this.transferRequestsService.findAll(query);
+  }
+
+  @Get('pending-admin')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get transfer requests pending admin review' })
+  @ApiResponse({ status: 200, type: [TransferRequestResponseDto] })
+  async getPendingForAdmin(): Promise<TransferRequestResponseDto[]> {
+    return this.transferRequestsService.getPendingForAdmin();
+  }
+
+  @Post(':id/admin-review')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Admin approves or rejects transfer request' })
+  @ApiResponse({ status: 200, type: TransferRequestResponseDto })
+  async adminReview(
+    @Param('id') id: string,
+    @Body() reviewDto: TransferAdminReviewDto,
+    @Req() req,
+  ): Promise<TransferRequestResponseDto> {
+    return this.transferRequestsService.adminReviewTransfer(
+      id,
+      req.user.id,
+      reviewDto,
+    );
   }
 
   @Get(':id')

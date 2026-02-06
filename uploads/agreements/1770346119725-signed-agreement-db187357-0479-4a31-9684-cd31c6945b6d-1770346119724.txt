@@ -1,0 +1,74 @@
+═══════════════════════════════════════════════════════════════
+            FINAL OWNERSHIP TRANSFER AGREEMENT
+                        [SIGNED COPY]
+═══════════════════════════════════════════════════════════════
+
+Date: February 6, 2026
+Agreement ID: db187357-0479-4a31-9684-cd31c6945b6d
+Agreement Type: Final Ownership Agreement
+Status: SIGNED
+
+───────────────────────────────────────────────────────────────
+PARTIES
+───────────────────────────────────────────────────────────────
+
+SELLER (BUILDER):
+  Name: Aman khan
+  Company: ABC Construction LDT
+  License Number: AUTO-GENERATED-LICENSE
+
+BUYER (NEW OWNER):
+  Name: Waqas
+  Father's Name: ghaffar khan
+  CNIC: 23131-2312312-3
+  Phone: +923412345678
+
+───────────────────────────────────────────────────────────────
+PROPERTY DETAILS
+───────────────────────────────────────────────────────────────
+
+Property Title: Plot 2
+Unit ID: NP-2
+Location: johar
+Size: 125.00 sq. meters
+
+───────────────────────────────────────────────────────────────
+OWNERSHIP TRANSFER
+───────────────────────────────────────────────────────────────
+
+WHEREAS all payments have been completed, ownership of the above-described property is hereby transferred from the Builder to the Buyer.
+
+Total Amount Paid: 6000000
+Payment Status: FULLY PAID
+
+───────────────────────────────────────────────────────────────
+TERMS AND CONDITIONS
+───────────────────────────────────────────────────────────────
+
+1. This agreement represents the final ownership transfer.
+
+2. The buyer is now the legal owner of the property.
+
+3. All ownership rights and responsibilities are transferred to the buyer.
+
+4. This agreement supersedes any previous agreements.
+
+───────────────────────────────────────────────────────────────
+DIGITAL SIGNATURES
+───────────────────────────────────────────────────────────────
+
+Builder Signature: ✓ SIGNED
+  Signed At: February 6, 2026 at 07:48 AM
+  Signature Hash: aea42e0d96aa8f75a462126ea3578fd2462388a014547055449564438a784542
+
+Buyer Signature:   ✓ SIGNED
+  Signed At: February 6, 2026 at 07:48 AM
+  Signature Hash: 9adef2e95f814adf03cfc3d980326c90564f72f4b69970c398025c3624196bd9
+
+Document Hash (SHA-256): 373d3e990a7ba1ff82fb6b9141014854136022a01d0c06ef253189715bf6ba38
+Signed Document Hash (SHA-256): 7681cc42491a8630888f47b4f4650a5907a73ddbac2eb726c5bdaf20614b3a2e
+
+═══════════════════════════════════════════════════════════════
+This document is digitally signed and stored immutably on IPFS.
+Blockchain Transaction: Pending
+═══════════════════════════════════════════════════════════════

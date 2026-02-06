@@ -127,11 +127,16 @@ export class PropertyRequestsService {
     const savedRequest =
       await this.propertyRequestRepository.save(propertyRequest);
 
-    // Update property status to RESERVED
+    // Update property status to RESERVED (reserve for this buyer)
     const property = eligibility.property;
-    if (property && property.status === LandStatus.AVAILABLE) {
-      property.status = LandStatus.RESERVED;
-      await this.landRepository.save(property);
+    if (property) {
+      if (property.status === LandStatus.AVAILABLE) {
+        property.status = LandStatus.RESERVED;
+        await this.landRepository.save(property);
+      } else if (property.status === LandStatus.RESALE_LISTED) {
+        property.status = LandStatus.RESERVED;
+        await this.landRepository.save(property);
+      }
     }
 
     return PropertyRequestResponseDto.fromEntity(savedRequest);
@@ -150,7 +155,7 @@ export class PropertyRequestsService {
   async respondToPropertyRequest(
     requestId: string,
     respondDto: RespondPropertyRequestDto,
-    builderId: string,
+    responderId: string,
   ): Promise<PropertyRequestResponseDto> {
     const request = await this.propertyRequestRepository.findOne({
       where: { id: requestId },
@@ -161,7 +166,7 @@ export class PropertyRequestsService {
       throw new NotFoundException('Property request not found');
     }
 
-    // Verify property belongs to builder
+    // Verify property and responder authorization
     const property = await this.landRepository.findOne({
       where: { id: request.propertyId },
       relations: ['owner'],
@@ -171,21 +176,27 @@ export class PropertyRequestsService {
       throw new NotFoundException('Property not found');
     }
 
-    if (property.ownerId !== builderId) {
+    // Responder must be: property owner (builder for new, seller for resale) OR original builder (for resale)
+    const isOwner = property.ownerId === responderId;
+    const isOriginalBuilder =
+      property.originalOwnerId && property.originalOwnerId === responderId;
+
+    if (!isOwner && !isOriginalBuilder) {
       throw new ForbiddenException(
         'You are not authorized to respond to this request',
       );
     }
 
-    // Verify builder is verified
-    const builder = await this.userRepository.findOne({
-      where: { id: builderId },
-    });
-
-    if (!builder || !builder.isBuilderVerified) {
-      throw new ForbiddenException(
-        'Only verified builders can respond to property requests',
-      );
+    // For new (non-resale) properties: responder must be verified builder
+    if (!property.isResale) {
+      const builder = await this.userRepository.findOne({
+        where: { id: responderId },
+      });
+      if (!builder || !builder.isBuilderVerified) {
+        throw new ForbiddenException(
+          'Only verified builders can respond to property requests',
+        );
+      }
     }
 
     // Check if request can be responded to
@@ -214,16 +225,14 @@ export class PropertyRequestsService {
 
     // Step 5.2: Update property status based on response
     if (respondDto.status === PropertyRequestStatus.APPROVED) {
-      // Step 5.2 Flow Step 3: Builder approved request
-      // Next step: Builder should create an initial agreement for this buyer
-      // Property status changes to AGREEMENT_PENDING to indicate ready for agreement creation
-      property.status = LandStatus.AGREEMENT_PENDING;
-      await this.landRepository.save(property);
-
-      // Step 5.2 Flow Step 4: If approved → Create agreement
-      // Note: Agreement creation is initiated separately by the builder
-      // The builder can now create an agreement using the agreements endpoint
-      // with propertyId and buyerId from this approved request
+      if (property.isResale) {
+        // Resale: keep RESERVED - buyer proceeds to payment directly (no agreement)
+        // Property stays reserved for this approved buyer
+      } else {
+        // New property: Builder approved - next step is agreement
+        property.status = LandStatus.AGREEMENT_PENDING;
+        await this.landRepository.save(property);
+      }
     } else {
       // If rejected, check if there are other pending requests
       const pendingRequestsCount = await this.propertyRequestRepository.count({
@@ -233,9 +242,11 @@ export class PropertyRequestsService {
         },
       });
 
-      // If no other pending requests, set property back to AVAILABLE
-      if (pendingRequestsCount === 0) {
-        property.status = LandStatus.AVAILABLE;
+      // If no other pending requests, set property back to original status
+      if (pendingRequestsCount === 0 && property.status === LandStatus.RESERVED) {
+        property.status = property.isResale
+          ? LandStatus.RESALE_LISTED
+          : LandStatus.AVAILABLE;
         await this.landRepository.save(property);
       }
     }
@@ -309,13 +320,23 @@ export class PropertyRequestsService {
   }> {
     const { page = 1, limit = 10, propertyId } = query;
 
-    // Get all properties owned by builder
-    const builderProperties = await this.landRepository.find({
-      where: { ownerId: builderId },
-      select: ['id'],
-    });
-
-    const propertyIds = builderProperties.map((p) => p.id);
+    // Get properties: owned by builder (new) OR originalOwnerId = builder (resale)
+    const [ownedProperties, resaleProperties] = await Promise.all([
+      this.landRepository.find({
+        where: { ownerId: builderId },
+        select: ['id'],
+      }),
+      this.landRepository.find({
+        where: { originalOwnerId: builderId },
+        select: ['id'],
+      }),
+    ]);
+    const propertyIds = [
+      ...new Set([
+        ...ownedProperties.map((p) => p.id),
+        ...resaleProperties.map((p) => p.id),
+      ]),
+    ];
 
     if (propertyIds.length === 0) {
       return {
@@ -390,13 +411,23 @@ export class PropertyRequestsService {
   }> {
     const { page = 1, limit = 10, propertyId, status } = query;
 
-    // Get all properties owned by builder
-    const builderProperties = await this.landRepository.find({
-      where: { ownerId: builderId },
-      select: ['id'],
-    });
-
-    const propertyIds = builderProperties.map((p) => p.id);
+    // Get properties: owned by builder (new) OR originalOwnerId = builder (resale)
+    const [ownedProperties, resaleProperties] = await Promise.all([
+      this.landRepository.find({
+        where: { ownerId: builderId },
+        select: ['id'],
+      }),
+      this.landRepository.find({
+        where: { originalOwnerId: builderId },
+        select: ['id'],
+      }),
+    ]);
+    const propertyIds = [
+      ...new Set([
+        ...ownedProperties.map((p) => p.id),
+        ...resaleProperties.map((p) => p.id),
+      ]),
+    ];
 
     if (propertyIds.length === 0) {
       return {
@@ -588,12 +619,14 @@ export class PropertyRequestsService {
         },
       });
 
-      // If no other pending requests, set property back to AVAILABLE
+      // If no other pending requests, set property back to original status
       if (
         pendingRequestsCount === 0 &&
         property.status === LandStatus.RESERVED
       ) {
-        property.status = LandStatus.AVAILABLE;
+        property.status = property.isResale
+          ? LandStatus.RESALE_LISTED
+          : LandStatus.AVAILABLE;
         await this.landRepository.save(property);
       }
     }

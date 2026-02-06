@@ -12,7 +12,12 @@ import {
     OwnershipDocumentType,
 } from '../entities/ownership-document.entity';
 import { OwnershipDocumentFile } from '../entities/ownership-document-file.entity';
-import { Land, LandStatus, AgreementStatus } from '../entities/land.entity';
+import {
+    Land,
+    LandStatus,
+    AgreementStatus,
+    OwnershipChainEntry,
+} from '../entities/land.entity';
 import { User, UserRole } from '../entities/user.entity';
 import { CreateOwnershipDocumentDto } from './dto/create-ownership-document.dto';
 import {
@@ -246,6 +251,9 @@ export class OwnershipDocumentsService {
 
             // Transfer property ownership
             const property = ownershipDoc.property;
+            const previousOwnerId = property.ownerId;
+            const nowIso = new Date().toISOString();
+
             property.ownerId = ownershipDoc.buyerId;
             property.currentOwnerId = ownershipDoc.buyerId;
 
@@ -255,6 +263,29 @@ export class OwnershipDocumentsService {
             }
 
             property.status = LandStatus.OWNED;
+
+            // Update ownership chain (1st owner → 2nd → …)
+            const chain: OwnershipChainEntry[] = property.ownershipChain
+                ? [...property.ownershipChain]
+                : [];
+            const fromDateFirstOwner = property.createdAt
+                ? new Date(property.createdAt).toISOString()
+                : nowIso;
+            chain.push({
+                order: chain.length + 1,
+                ownerId: previousOwnerId,
+                fromDate: fromDateFirstOwner,
+                toDate: nowIso,
+                transferType: 'initial_sale',
+            });
+            chain.push({
+                order: chain.length + 2,
+                ownerId: ownershipDoc.buyerId,
+                fromDate: nowIso,
+                toDate: null,
+                transferType: 'initial_sale',
+            });
+            property.ownershipChain = chain;
 
             await this.landRepository.save(property);
 

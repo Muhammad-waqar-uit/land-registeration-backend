@@ -1,5 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Land, LandStatus, AgreementStatus } from '../../entities/land.entity';
+import {
+  Land,
+  LandStatus,
+  AgreementStatus,
+  OwnershipChainEntry,
+} from '../../entities/land.entity';
 import { Project } from '../../entities/project.entity';
 import { User } from '../../entities/user.entity';
 import { UserResponseDto } from '../../auth/dto/auth-response.dto';
@@ -111,6 +116,24 @@ export class LandResponseDto {
 
   @ApiProperty({ description: 'Original owner ID (for resale)', required: false })
   originalOwnerId?: string | null;
+
+  @ApiProperty({
+    description: 'Ownership chain: 1st owner, then 2nd, then 3rd… (order, ownerId, fromDate, toDate, transferType)',
+    required: false,
+    nullable: true,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        order: { type: 'number' },
+        ownerId: { type: 'string' },
+        fromDate: { type: 'string', format: 'date-time' },
+        toDate: { type: 'string', format: 'date-time', nullable: true },
+        transferType: { type: 'string', enum: ['initial_sale', 'resale'] },
+      },
+    },
+  })
+  ownershipChain?: OwnershipChainEntry[] | null;
 
   @ApiProperty({ description: 'Current owner ID', required: false })
   currentOwnerId?: string | null;
@@ -254,6 +277,7 @@ export class LandResponseDto {
       isResale: land.isResale,
       agreementStatus: land.agreementStatus,
       originalOwnerId: land.originalOwnerId ?? undefined,
+      ownershipChain: land.ownershipChain ?? undefined,
       currentOwnerId: land.currentOwnerId ?? undefined,
       installmentPlanYears: land.installmentPlanYears ?? undefined,
       installmentStartDate: land.installmentStartDate ?? undefined,

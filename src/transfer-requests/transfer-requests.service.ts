@@ -18,8 +18,16 @@ import {
   ResaleRequest,
   ResaleRequestStatus,
 } from '../entities/resale-request.entity';
-import { Land, LandStatus } from '../entities/land.entity';
+import {
+  Land,
+  LandStatus,
+  OwnershipChainEntry,
+} from '../entities/land.entity';
 import { User, UserRole } from '../entities/user.entity';
+import {
+  OwnershipHistory,
+  TransferType,
+} from '../entities/ownership-history.entity';
 import { CreateTransferRequestDto } from './dto/create-transfer-request.dto';
 import { QueryTransferRequestsDto } from './dto/query-transfer-requests.dto';
 import { TransferRequestResponseDto } from './dto/transfer-request-response.dto';
@@ -46,6 +54,8 @@ export class TransferRequestsService {
     private landRepository: Repository<Land>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(OwnershipHistory)
+    private ownershipHistoryRepository: Repository<OwnershipHistory>,
     private fileStorageService: FileStorageService,
     private hashService: HashService,
     private ipfsService: IpfsService,
@@ -264,6 +274,18 @@ export class TransferRequestsService {
       );
     }
 
+    // Seller must have confirmed payment and allowed document change before builder can upload
+    if (transferRequest.paymentConfirmed !== true) {
+      throw new BadRequestException(
+        'Seller must confirm payment received before documents can be uploaded. Use the confirm-payment endpoint first.',
+      );
+    }
+    if (transferRequest.documentChangeAllowed !== true) {
+      throw new BadRequestException(
+        'Seller must allow document change before documents can be uploaded.',
+      );
+    }
+
     // Verify builder is verified
     const builder = await this.userRepository.findOne({
       where: { id: builderId },
@@ -388,14 +410,22 @@ export class TransferRequestsService {
       );
     }
 
-    // Verify status
-    if (transferRequest.status !== TransferRequestStatus.DOCUMENTS_UPLOADED) {
+    // Verify status - allow completion after documents uploaded or admin approved
+    const completableStatuses = [
+      TransferRequestStatus.DOCUMENTS_UPLOADED,
+      TransferRequestStatus.PENDING_ADMIN_APPROVAL,
+      TransferRequestStatus.APPROVED,
+    ];
+    if (!completableStatuses.includes(transferRequest.status)) {
       throw new BadRequestException(
         `Cannot complete transfer with status "${transferRequest.status}". Documents must be uploaded first.`,
       );
     }
 
     // Update property ownership
+    const previousOwnerId = property.ownerId;
+    const nowIso = new Date().toISOString();
+
     property.ownerId = transferRequest.newOwnerId;
     property.currentOwnerId = transferRequest.newOwnerId;
     // Preserve originalOwnerId for future resales
@@ -405,7 +435,36 @@ export class TransferRequestsService {
     property.status = LandStatus.OWNED;
     property.isResale = false; // No longer listed for resale
 
+    // Update ownership chain (append new owner, close previous)
+    const chain: OwnershipChainEntry[] = property.ownershipChain
+      ? [...property.ownershipChain]
+      : [];
+    if (chain.length > 0) {
+      chain[chain.length - 1].toDate = nowIso;
+    }
+    chain.push({
+      order: chain.length + 1,
+      ownerId: transferRequest.newOwnerId,
+      fromDate: nowIso,
+      toDate: null,
+      transferType: 'resale',
+    });
+    property.ownershipChain = chain;
+
     await this.landRepository.save(property);
+
+    // Create ownership history record for resale
+    const ownershipHistory = this.ownershipHistoryRepository.create({
+      propertyId: property.id,
+      fromOwnerId: previousOwnerId,
+      toOwnerId: transferRequest.newOwnerId,
+      transferType: TransferType.RESALE,
+      agreementId: null,
+      transferRequestId: transferRequestId,
+      blockchainTxHash: null, // set below if ledger updated
+      transferredAt: new Date(),
+    });
+    await this.ownershipHistoryRepository.save(ownershipHistory);
 
     // Update ledger (LandLedgerLite) for resale – new owner on-chain
     const newOwner = transferRequest.newOwner;
@@ -416,6 +475,7 @@ export class TransferRequestsService {
         })
       : null;
     const builderWallet = originalBuilder?.walletAddress;
+    let ledgerTxHash: string | null = null;
     if (
       this.blockchainService.isLedgerAvailable() &&
       newOwner?.walletAddress
@@ -429,8 +489,9 @@ export class TransferRequestsService {
             builderWallet,
           );
         if (result.success) {
+          ledgerTxHash = result.transactionHash || null;
           console.log(
-            `Ledger: property owner updated (resale) for land ${property.id}. TX: ${result.transactionHash}`,
+            `Ledger: property owner updated (resale) for land ${property.id}. TX: ${ledgerTxHash}`,
           );
         } else {
           console.warn(
@@ -443,6 +504,10 @@ export class TransferRequestsService {
           error,
         );
       }
+    }
+    if (ledgerTxHash) {
+      ownershipHistory.blockchainTxHash = ledgerTxHash;
+      await this.ownershipHistoryRepository.save(ownershipHistory);
     }
 
     // Update transfer request

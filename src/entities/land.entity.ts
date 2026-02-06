@@ -14,6 +14,15 @@ import { Payment } from './payment.entity';
 import { Project } from './project.entity';
 import { Installment } from './installment.entity';
 
+/** Single entry in land ownership chain (1st owner, 2nd, 3rd...) */
+export interface OwnershipChainEntry {
+  order: number;
+  ownerId: string;
+  fromDate: string; // ISO date
+  toDate: string | null; // ISO date when ownership ended, null if current owner
+  transferType: 'initial_sale' | 'resale';
+}
+
 export enum LandStatus {
   AVAILABLE = 'available',
   RESERVED = 'reserved',
@@ -53,6 +62,10 @@ export class Land {
 
   @Column({ type: 'boolean', default: false })
   isResale: boolean; // Mark if resale property
+
+  /** When listed for resale; payments before this date (first buyer) are excluded from totalPaid/remainingBalance */
+  @Column({ type: 'timestamp', nullable: true })
+  resaleListedAt: Date | null;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   size: number;
@@ -100,6 +113,13 @@ export class Land {
 
   @Column({ type: 'uuid', nullable: true })
   currentOwnerId: string | null; // Current owner (nullable if available/owned by builder)
+
+  /**
+   * Ownership chain: who was 1st, then 2nd, then 3rd...
+   * JSON array: [{ order, ownerId, fromDate, toDate?, transferType }]
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  ownershipChain: OwnershipChainEntry[] | null;
 
   // Installment plan fields
   @Column({ type: 'int', nullable: true })
